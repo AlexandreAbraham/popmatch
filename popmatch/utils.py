@@ -4,6 +4,7 @@ from formulaic import Formula, ModelSpec
 import scipy.stats as stats
 import numpy as np
 import math
+from scipy.stats import chi2_contingency
 
 
 class FormulaTransformer(BaseEstimator, TransformerMixin):
@@ -60,4 +61,23 @@ def smd(df, formula):
   
             smd = np.sqrt((x2 / v.shape[0]) / (len(indices)))
         smds.append((feature, smd))
+    return smds
+
+
+def compute_smd(df, groups, continuous, categorical):
+    smd = []
+    for c in continuous:
+        X_0 = df[groups == 0][c].values
+        X_1 = df[groups == 1][c].values
+        n_0 = X_0.shape[0]
+        n_1 = X_1.shape[0]
+        pooled_std = np.sqrt(((n_0 - 1) * X_0.std() ** 2 + (n_1 - 1) * X_1.std() ** 2) / (n_0 + n_1 - 2))
+        smd.append((c, (np.abs(X_0.mean() - X_1.mean()) / pooled_std)))
+
+    for c in categorical:
+        ct = pd.crosstab(groups, df[c])
+        x2 = chi2_contingency(ct, correction=False)[0]
+        smd.append((c, np.sqrt(x2 / (df.shape[0] * (ct.shape[1] - 1)))))
+
+    smds = pd.DataFrame(smd, columns=['feature', 'smd'])
     return smds
