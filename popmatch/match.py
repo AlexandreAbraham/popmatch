@@ -1,21 +1,46 @@
-from .utils import compute_smd
+from .evaluation import compute_smd
 import pandas as pd
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
 from scipy.sparse.csgraph import min_weight_full_bipartite_matching
 from scipy.optimize import linear_sum_assignment
 from sklearn.preprocessing import StandardScaler
+from .experiment import dict_wrapper
+from .cluster import GeneralPurposeClustering
+from scipy.sparse import csc_array
+
+
+@dict_wrapper('data_population')
+def split_populations_with_error(data_df, data_target,
+                                 data_continuous_std, data_categorical, data_ordinal,
+                                 input_simulated_split_population_ratio,
+                                 input_simulated_split_target_difference=0.2,
+                                 input_simulated_split_smd_weight=10,
+                                 input_random_state=None,
+                                 ):
+    
+    def loss(df, cluster_ids):
+        y_0 = data_df[data_target][cluster_ids == 0].mean()
+        y_1 = data_df[data_target][cluster_ids == 1].mean()
+        dy = (input_simulated_split_target_difference - (y_1 - y_0)) ** 2
+
+        smds = compute_smd(df, cluster_ids, data_continuous_std, data_categorical + data_ordinal)
+        smd = smds.smd.mean()
+        
+        return dy - input_simulated_split_smd_weight * smd
+
+    gps = GeneralPurposeClustering(input_simulated_split_population_ratio, loss,
+                                   verbose=1, random_state=input_random_state)
+    gps.fit(data_df)
+    return gps.cluster_id_
 
 
 
-def propensity_match(df, population, propensity,
-                     categorical, continuous,
-                     n_match=1, feature_weight=0.1, standardize=True, verbose=1):
+@dict_wrapper('{matching}_groups', '{matching}_map') 
+def bipartify(data_df, data_population, propensity_score,
+              data_categorical, data_continuous_std,
+              n_match=1, feature_weight=0.1, verbose=1):
     """Perform population matching.
-
-
-    
-    
     """
 
 
@@ -27,18 +52,19 @@ def propensity_match(df, population, propensity,
     # - Else, we continue to break it down using ordinal variables
     # - If we run out of categorical and we are still not good, then do nn matching.
     
-    continuous_features = df[continuous]
-    if standardize:
-        continuous_features = StandardScaler().fit_transform(continuous_features)
-        continuous_features = pd.DataFrame(continuous_features, columns=continuous)
+    continuous_features = data_df[data_continuous_std]
 
     match_pop_0 = []
     match_pop_1 = []
     match_dists = []
 
-    for _, gdf in df.groupby(categorical):
+    # For convenience it is easier to have propensity in the data
+    data_df['_propensity'] = propensity_score
+    data_df['_population'] = data_population
 
-        pop = gdf[population]
+    for _, gdf in data_df.groupby(data_categorical):
+
+        pop = gdf['_population']
         gdf_0, gdf_1 = gdf[pop == 0], gdf[pop == 1]
 
         if min(gdf_0.shape[0], gdf_1.shape[0]) == 0:
@@ -49,32 +75,45 @@ def propensity_match(df, population, propensity,
 
         for i in range(1, 10):
             try:
-                ps_dis = NearestNeighbors(n_neighbors=5 * i)
-                ps_dis.fit(gdf_0[[propensity]])
-                ps_dis = ps_dis.radius_neighbors_graph(gdf_1[[propensity]], mode='distance')
-                fe_dis = NearestNeighbors(n_neighbors=5 * i)
-                fe_dis.fit(continuous_features.loc[gdf_0.index])
-                fe_dis = fe_dis.radius_neighbors_graph(continuous_features.loc[gdf_1.index], mode='distance')
-                ps_dis, fe_dis = ps_dis.T, fe_dis.T
-                dis = ps_dis + feature_weight * fe_dis
+                print(i, '/10', gdf_0.shape, gdf_1.shape)
+                ps_dis = NearestNeighbors(n_neighbors=5 * i, radius=i)
+                ps_dis.fit(gdf_0[['_propensity']])
+                ps_dis = ps_dis.radius_neighbors_graph(gdf_1[['_propensity']], mode='distance').T
+                ps_dis_coo = ps_dis.tocoo()
+                col, row = ps_dis_coo.col, ps_dis_coo.row
+                if col.shape[0] == 0:
+                    continue
+                if (#indices.size == 0 or
+                    np.unique(row).shape[0] < ps_dis.shape[0] or
+                    np.unique(col).shape[0] < ps_dis.shape[1]):
 
+                    continue
+
+                fe_dis = continuous_features.loc[gdf_0.index[row]].values - continuous_features.loc[gdf_1.index[col]].values
+                fe_dis = np.sqrt((fe_dis ** 2).sum(axis=1))
+                fe_dis = csc_array((fe_dis, (row, col)))
+                dis = ps_dis + feature_weight * fe_dis
                 # If all distances are defined, bipartite match stalls. We use hungarian in this case
-                if dis.getnnz() == np.multiply(*dis.shape):
+                print(dis.count_nonzero(), np.multiply(*dis.shape))
+                if dis.count_nonzero() == np.multiply(*dis.shape):
                     pop_0_idx, pop_1_idx = linear_sum_assignment(dis.todense())
+                    assert(len(pop_0_idx.shape) == len(pop_1_idx.shape))
                 else:
                     pop_0_idx, pop_1_idx = min_weight_full_bipartite_matching(dis)
+                    assert(len(pop_0_idx.shape) == len(pop_1_idx.shape))
+
                 match_pop_0.append(gdf_0.index[pop_0_idx].values)
                 match_pop_1.append(gdf_1.index[pop_1_idx].values)
                 match_dists.append(dis[pop_0_idx, pop_1_idx].A1)
-
                 break
 
-            except Exception as e:
-                print(e)
+            except ValueError as e:
+                if str(e) != "no full matching exists":
+                    raise
                 pass
 
     # We create a group indicator and return it.
-    groups = pd.DataFrame(-np.ones(df.shape[0]), index=df.index)
+    groups = pd.DataFrame(-np.ones(data_df.shape[0]), index=data_df.index)
     match_pop_0 = np.hstack(match_pop_0)
     match_pop_1 = np.hstack(match_pop_1)
     match_dists = np.hstack(match_dists)
@@ -86,9 +125,9 @@ def propensity_match(df, population, propensity,
     return groups, matchmap
 
 
-def propensity_match_cv(df, population, propensity,
-                        categorical, ordinal, continuous,
-                        n_match=1, feature_weight=0.1, verbose=1):
+def bipartify_cv(df, population, propensity,
+                 categorical, ordinal, continuous,
+                 n_match=1, feature_weight=0.1, verbose=1):
     
     best_groups = None
     best_matchmap = None
@@ -97,7 +136,7 @@ def propensity_match_cv(df, population, propensity,
 
     # Ordinal features must be ordered by decreasing importance.
     for i in range(len(ordinal) + 1):
-        groups, matchmap = propensity_match(df, population, propensity,
+        groups, matchmap = bipartify(df, population, propensity,
                                             categorical + ordinal[:i], continuous + ordinal[i:],
                                             n_match=n_match, feature_weight=feature_weight,
                                             verbose=verbose)

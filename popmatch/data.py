@@ -1,9 +1,42 @@
 import numpy as np
 from sklearn.datasets import make_classification, make_regression
 from sklearn.utils import check_random_state
-import numpy as np
+import pandas as pd
 from scipy.optimize import linear_sum_assignment
 from sklearn.neighbors import NearestNeighbors
+from .experiment import dict_wrapper, dict_router
+from sklearn.preprocessing import StandardScaler
+
+
+
+@dict_wrapper('data_df', 'data_target', 'data_continuous', 'data_ordinal', 'data_categorical')
+def load_heart(input_dataset):
+    assert(input_dataset == 'heart')
+
+    df = pd.read_csv('../datasets/heart.csv')
+
+    target = 'target'
+    continuous = ['age', 'trestbps', 'chol', 'thalach',  'oldpeak']
+    ordinal = ['restecg', 'ca']
+    categorical = ['sex', 'cp', 'fbs',  'exang', 'slope', 'thal']
+
+    return df, target, continuous, ordinal, categorical
+
+
+@dict_router
+def load_data(input_dataset):
+
+    if input_dataset == 'heart':
+        return load_heart
+    
+
+@dict_wrapper('data_df', 'data_continuous_std')
+def standardize_continuous_features(data_df, data_continuous):
+    continuous_std = []
+    for c in data_continuous:
+        data_df[c + '_std'] = StandardScaler().fit_transform(data_df[[c]])
+        continuous_std.append(c + '_std')
+    return data_df, continuous_std
 
 
 def perform_1_to_1_matching(X_source, X_target):
