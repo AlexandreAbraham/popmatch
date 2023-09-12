@@ -13,6 +13,7 @@ from popmatch.match import bipartify, split_populations_with_error
 from popmatch.evaluation import compute_smd
 from popmatch.preprocess import preprocess
 from popmatch.propensity import propensity_score
+from popmatch.experiment import dict_cache
 
 
 experiment = {
@@ -32,11 +33,13 @@ load_data(experiment)
 standardize_continuous_features(experiment)
 preprocess(experiment)
 for seed in range(0, 1):
-    split_populations_with_error(experiment, data_random_state=seed)
-    propensity_score(experiment, data_random_state=seed)
-    bipartify(experiment, matching='seed0', data_random_state=seed, n_match=1, feature_weight=0.1, verbose=1)
+    split_id = 'split' + str(seed)
+    for not_already in dict_cache(experiment, split_id):
+        split_populations_with_error(experiment, data_random_state=seed, splitid=split_id)
+    propensity_score(experiment, data_random_state=seed, splitid=split_id)
+    bipartify(experiment, splitid=split_id, data_random_state=seed, n_match=1, feature_weight=0.1, verbose=1)
 
-    our_smd = compute_smd(experiment, matching='seed0').smd.mean()
+    our_smd = compute_smd(experiment, splitid=split_id, matching='bipartify').smd.mean()
 
 print('SMD', our_smd)
 # compute_smd_baseline(experiment)
@@ -70,23 +73,23 @@ if False:
     print(f'SMD matched psmpy', compute_smd(matched_df, matched_groups, continuous_std, categorical + ordinal).smd.mean())
 
 
-print('Prop')
-#my_groups, matchmap, _, _ = bipartify_cv(df, 'groups', 'Propensity', categorical, ordinal, continuous, n_match=1, verbose=1, feature_weight=1.0)
-my_groups = my_groups.values[:, 0]
-mask = (my_groups >= 0)
-print(f'SMD matched ours', compute_smd(df[mask], my_groups[mask], continuous_std, categorical + ordinal).smd.mean())
+    print('Prop')
+    #my_groups, matchmap, _, _ = bipartify_cv(df, 'groups', 'Propensity', categorical, ordinal, continuous, n_match=1, verbose=1, feature_weight=1.0)
+    my_groups = my_groups.values[:, 0]
+    mask = (my_groups >= 0)
+    print(f'SMD matched ours', compute_smd(df[mask], my_groups[mask], continuous_std, categorical + ordinal).smd.mean())
 
-print('Size psmpy', (matched_groups == 0).sum(), (matched_groups == 1).sum())
-print('Size ours', (my_groups == 0).sum(), (my_groups == 1).sum())
+    print('Size psmpy', (matched_groups == 0).sum(), (matched_groups == 1).sum())
+    print('Size ours', (my_groups == 0).sum(), (my_groups == 1).sum())
 
 
-print(f'Target mean group 0 {df[target][groups == 0].mean()}')
-print(f'Target mean group 1 {df[target][groups == 1].mean()}')
+    print(f'Target mean group 0 {df[target][groups == 0].mean()}')
+    print(f'Target mean group 1 {df[target][groups == 1].mean()}')
 
-print(f'Target mean psmpy group 0 {df[target][psm.matched_ids["index"]].mean()}')
-print(f'Target mean psmpy group 1 {df[target][psm.matched_ids["matched_ID"]].mean()}')
+    print(f'Target mean psmpy group 0 {df[target][psm.matched_ids["index"]].mean()}')
+    print(f'Target mean psmpy group 1 {df[target][psm.matched_ids["matched_ID"]].mean()}')
 
-print(f'Target mean ours group 0 {df[target][my_groups == 0].mean()}')
-print(f'Target mean ours group 1 {df[target][my_groups == 1].mean()}')
+    print(f'Target mean ours group 0 {df[target][my_groups == 0].mean()}')
+    print(f'Target mean ours group 1 {df[target][my_groups == 1].mean()}')
 
-print('p-value matched', ttest_ind(df[target][psm.matched_ids['index']], df[target][psm.matched_ids['matched_ID']])[1])
+    print('p-value matched', ttest_ind(df[target][psm.matched_ids['index']], df[target][psm.matched_ids['matched_ID']])[1])
