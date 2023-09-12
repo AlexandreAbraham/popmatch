@@ -34,13 +34,9 @@ preprocess(experiment)
 for seed in range(0, 1):
     split_populations_with_error(experiment, data_random_state=seed)
     propensity_score(experiment, data_random_state=seed)
-    bipartify(experiment, matching='seed_0', data_random_state=seed, n_match=1, feature_weight=0.1, verbose=1)
-data_df = experiment['data']['df']
-groups = experiment['matching']['groups'].values
-mask = (groups >= 0)
+    bipartify(experiment, matching='seed0', data_random_state=seed, n_match=1, feature_weight=0.1, verbose=1)
 
-our_smd = compute_smd(data_df[mask], groups[mask], experiment['data']['continuous_std'], 
-                      experiment['data']['categorical'] + experiment['data']['ordinal']).smd.mean()
+    our_smd = compute_smd(experiment, matching='seed0').smd.mean()
 
 print('SMD', our_smd)
 # compute_smd_baseline(experiment)
