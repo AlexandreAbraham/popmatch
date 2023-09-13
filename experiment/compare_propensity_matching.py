@@ -9,8 +9,8 @@ from popmatch.data import load_data, standardize_continuous_features
 from statsmodels.stats.meta_analysis import effectsize_smd
 from formulaic import ModelSpec, Formula
 from formulaic.parser.types.factor import Factor
-from popmatch.match import bipartify, split_populations_with_error
-from popmatch.evaluation import compute_smd
+from popmatch.match import bipartify, split_populations_with_error, psmpy_match
+from popmatch.evaluation import compute_smd, compute_target_diff
 from popmatch.preprocess import preprocess
 from popmatch.propensity import propensity_score
 from popmatch.experiment import dict_cache
@@ -19,8 +19,10 @@ from popmatch.experiment import dict_cache
 experiment = {
     'input': {
         'dataset': 'heart',
-        'propensity_model': 'logistic_regression',
-        'clip_score': 0.05,
+        #'propensity_model': 'logistic_regression',
+        #'propensity_model': 'random_forest',
+        'propensity_model': 'psmpy',
+        #'clip_score': 0.05,
         'calibrated': True,
         'random_state': 12,
         'simulated_split_population_ratio': [0.3, 0.7],
@@ -38,10 +40,20 @@ for seed in range(0, 1):
         split_populations_with_error(experiment, data_random_state=seed, splitid=split_id)
     propensity_score(experiment, data_random_state=seed, splitid=split_id)
     bipartify(experiment, splitid=split_id, data_random_state=seed, n_match=1, feature_weight=0.1, verbose=1)
+    psmpy_match(experiment, splitid=split_id, data_random_state=seed)
 
-    our_smd = compute_smd(experiment, splitid=split_id, matching='bipartify').smd.mean()
+    bipartify_smd = compute_smd(experiment, splitid=split_id, matching='bipartify').smd.mean()
+    bipartify_n0, bipartify_n1, bipartify_target_diff = compute_target_diff(experiment, splitid=split_id, matching='bipartify')
 
-print('SMD', our_smd)
+    psmpy_smd = compute_smd(experiment, splitid=split_id, matching='psmpy').smd.mean()
+    psmpy_n0, psmpy_n1, psmpy_target_diff = compute_target_diff(experiment, splitid=split_id, matching='psmpy')
+    
+print('Bipartify SMD', bipartify_smd)
+print('Bipartify n0 / n1', bipartify_n0, bipartify_n1)
+print('Bipartify target diff', bipartify_target_diff)
+print('PsmPy SMD', psmpy_smd)
+print('PsmPy n0 / n1', psmpy_n0, psmpy_n1)
+print('PsmPy target diff', psmpy_target_diff)
 # compute_smd_baseline(experiment)
 
 
