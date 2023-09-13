@@ -8,7 +8,7 @@ import pickle
 def dict_router(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
-        if len(args) == 1 and len(kwargs) == 0 and isinstance(args[0], dict):
+        if len(args) == 1 and isinstance(args[0], dict):
             d = args[0]
             # Extract the inputs
             call_args = []
@@ -48,13 +48,24 @@ def dict_wrapper(*out_names):
                 call_args = []
                 call_kwargs = {}
                 for name, parameter in inspect.signature(func).parameters.items():
+                    # XXX This code is ugly and deserves some refactoring
+
                     if name in kwargs:
                         # We allow overriding some parameters in the kwargs
                         call_kwargs[name] = kwargs[name]
                         continue
                     section, varname = name.split('_', 1)
+
+                    # Override specific tokens
                     if section in kwargs:
                         section = kwargs[section]
+                    tokens = []
+                    for token in varname.split('_'):
+                        if token in kwargs:
+                            token = kwargs[token]
+                        tokens.append(token)
+                    varname = '_'.join(tokens)
+
                     if section not in d:
                         raise ValueError('[{}] Section {} not in params dictionary'.format(name, section))
                     if parameter.default == inspect._empty:
@@ -74,6 +85,8 @@ def dict_wrapper(*out_names):
                     if section not in d:
                         d[section] = {}
                     d[section][varname] = value
+                if len(out_names) == 1:
+                    result = result[0]
                 return result
             else:
                 # Call the function as usual
@@ -91,4 +104,3 @@ def dict_cache(experiment, section, cache_path='./'):
     else:
         with open(str(result_path), 'rb') as file:
             experiment[section] = pickle.load(file)
-    raise StopIteration

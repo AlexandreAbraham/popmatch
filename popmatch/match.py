@@ -8,9 +8,10 @@ from sklearn.preprocessing import StandardScaler
 from .experiment import dict_wrapper
 from .cluster import GeneralPurposeClustering
 from scipy.sparse import csc_array
+from psmpy import PsmPy
 
 
-@dict_wrapper('data_population')
+@dict_wrapper('{splitid}_population')
 def split_populations_with_error(data_df, data_target,
                                  data_continuous_std, data_categorical, data_ordinal,
                                  input_simulated_split_population_ratio,
@@ -24,7 +25,7 @@ def split_populations_with_error(data_df, data_target,
         y_1 = data_df[data_target][cluster_ids == 1].mean()
         dy = (input_simulated_split_target_difference - (y_1 - y_0)) ** 2
 
-        smds = compute_smd(df, cluster_ids, data_continuous_std, data_categorical + data_ordinal)
+        smds = compute_smd(df, data_continuous_std, data_categorical, data_ordinal, cluster_ids)
         smd = smds.smd.mean()
         
         return dy - input_simulated_split_smd_weight * smd
@@ -35,9 +36,29 @@ def split_populations_with_error(data_df, data_target,
     return gps.cluster_id_
 
 
+@dict_wrapper('{splitid}_psmpy_groups', '{splitid}_psmpy_map') 
+def psmpy_match(data_X, splitid_population, splitid_propensity_score, data_random_state):
+    df = pd.DataFrame(data_X)
+    df['groups'] = splitid_population
+    df['index'] = np.arange(data_X.shape[0])
 
-@dict_wrapper('{matching}_groups', '{matching}_map') 
-def bipartify(data_df, data_population, propensity_score,
+    psm = PsmPy(df, treatment='groups', indx='index', exclude = [], seed=data_random_state)
+    psm.logistic_ps(balance=True)
+    
+    # We give psmpy the score we want and override its interals
+    psm.predicted_data['propensity_score'] = splitid_propensity_score
+
+    psm.knn_matched(matcher='propensity_score', replacement=False, drop_unmatched=True)
+
+    groups = pd.DataFrame(-np.ones(df.shape[0]), index=df.index)
+    groups.loc[psm.matched_ids["index"]] = 0
+    groups.loc[psm.matched_ids["matched_ID"]] = 1
+
+    return groups.values[:, 0], None
+
+
+@dict_wrapper('{splitid}_bipartify_groups', '{splitid}_bipartify_map') 
+def bipartify(data_df, splitid_population, splitid_propensity_score,
               data_categorical, data_continuous_std,
               n_match=1, feature_weight=0.1, verbose=1):
     """Perform population matching.
@@ -59,8 +80,8 @@ def bipartify(data_df, data_population, propensity_score,
     match_dists = []
 
     # For convenience it is easier to have propensity in the data
-    data_df['_propensity'] = propensity_score
-    data_df['_population'] = data_population
+    data_df['_propensity'] = splitid_propensity_score
+    data_df['_population'] = splitid_population
 
     for _, gdf in data_df.groupby(data_categorical):
 
@@ -122,7 +143,7 @@ def bipartify(data_df, data_population, propensity_score,
 
     matchmap = pd.DataFrame.from_dict({'index_pop_0': match_pop_0, 'index_pop_1': match_pop_1, 'distance': match_dists})
 
-    return groups, matchmap
+    return groups.values[:, 0], matchmap
 
 
 def bipartify_cv(df, population, propensity,

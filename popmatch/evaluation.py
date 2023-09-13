@@ -44,11 +44,11 @@ def smd(df, formula):
     return smds
 
 
-@dict_wrapper('{matching}_smds')
-def compute_smd(data_df, data_continuous, data_categorical, data_ordinal, matching_groups):
+@dict_wrapper('{splitid}_{matching}_smds')
+def compute_smd(data_df, data_continuous, data_categorical, data_ordinal, splitid_matching_groups):
     smd = []
-    gdf_0 = data_df[matching_groups == 0]
-    gdf_1 = data_df[matching_groups == 1]
+    gdf_0 = data_df[splitid_matching_groups == 0]
+    gdf_1 = data_df[splitid_matching_groups == 1]
     for c in data_continuous:
         X_0 = gdf_0[c].values
         X_1 = gdf_1[c].values
@@ -58,9 +58,17 @@ def compute_smd(data_df, data_continuous, data_categorical, data_ordinal, matchi
         smd.append((c, (np.abs(X_0.mean() - X_1.mean()) / pooled_std)))
 
     for c in data_categorical + data_ordinal:
-        ct = pd.crosstab(matching_groups[matching_groups >= 0], data_df[matching_groups >= 0][c])
+        ct = pd.crosstab(splitid_matching_groups[splitid_matching_groups >= 0], data_df[splitid_matching_groups >= 0][c])
         x2 = chi2_contingency(ct, correction=False)[0]
         smd.append((c, np.sqrt(x2 / (data_df.shape[0] * (ct.shape[1] - 1)))))
 
     smds = pd.DataFrame(smd, columns=['feature', 'smd'])
     return smds
+
+
+@dict_wrapper('{splitid}_{matching}_n0, {splitid}_{matching}_n1, {splitid}_{matching}_target_diff')
+def compute_target_diff(data_y, splitid_matching_groups):
+    n0 = (splitid_matching_groups == 0).sum()
+    n1 = (splitid_matching_groups == 1).sum()
+    diff = np.abs(data_y[splitid_matching_groups == 0].mean() - data_y[splitid_matching_groups == 1].mean())
+    return n0, n1, diff
