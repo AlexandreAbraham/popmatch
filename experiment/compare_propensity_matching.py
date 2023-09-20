@@ -34,13 +34,13 @@ experiment = {
 load_data(experiment)
 standardize_continuous_features(experiment)
 preprocess(experiment)
-for seed in range(0, 1):
+for seed in range(0, 2):
     split_id = 'split' + str(seed)
     for not_already in dict_cache(experiment, split_id):
-        split_populations_with_error(experiment, data_random_state=seed, splitid=split_id)
-    propensity_score(experiment, data_random_state=seed, splitid=split_id)
-    bipartify(experiment, splitid=split_id, data_random_state=seed, n_match=1, feature_weight=0.1, verbose=1)
-    psmpy_match(experiment, splitid=split_id, data_random_state=seed)
+        split_populations_with_error(experiment, input_random_state=seed, splitid=split_id)
+    propensity_score(experiment, input_random_state=seed, splitid=split_id)
+    bipartify(experiment, splitid=split_id, input_random_state=seed, n_match=1, feature_weight=0.1, verbose=1)
+    psmpy_match(experiment, splitid=split_id, input_random_state=seed)
 
     bipartify_smd = compute_smd(experiment, splitid=split_id, matching='bipartify').smd.mean()
     bipartify_n0, bipartify_n1, bipartify_target_diff = compute_target_diff(experiment, splitid=split_id, matching='bipartify')
@@ -48,12 +48,12 @@ for seed in range(0, 1):
     psmpy_smd = compute_smd(experiment, splitid=split_id, matching='psmpy').smd.mean()
     psmpy_n0, psmpy_n1, psmpy_target_diff = compute_target_diff(experiment, splitid=split_id, matching='psmpy')
     
-print('Bipartify SMD', bipartify_smd)
-print('Bipartify n0 / n1', bipartify_n0, bipartify_n1)
-print('Bipartify target diff', bipartify_target_diff)
-print('PsmPy SMD', psmpy_smd)
-print('PsmPy n0 / n1', psmpy_n0, psmpy_n1)
-print('PsmPy target diff', psmpy_target_diff)
+    print('Bipartify SMD', bipartify_smd)
+    print('Bipartify n0 / n1', bipartify_n0, bipartify_n1)
+    print('Bipartify target diff', bipartify_target_diff)
+    print('PsmPy SMD', psmpy_smd)
+    print('PsmPy n0 / n1', psmpy_n0, psmpy_n1)
+    print('PsmPy target diff', psmpy_target_diff)
 # compute_smd_baseline(experiment)
 
 
