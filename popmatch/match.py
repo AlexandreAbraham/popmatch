@@ -9,6 +9,7 @@ from .experiment import dict_wrapper
 from .cluster import GeneralPurposeClustering
 from scipy.sparse import csc_array
 from psmpy import PsmPy
+from sklearn.metrics import pairwise_distances
 
 
 @dict_wrapper('{splitid}_population')
@@ -37,12 +38,12 @@ def split_populations_with_error(data_df, data_target,
 
 
 @dict_wrapper('{splitid}_psmpy_groups', '{splitid}_psmpy_map') 
-def psmpy_match(data_X, splitid_population, splitid_propensity_score, data_random_state):
+def psmpy_match(data_X, splitid_population, splitid_propensity_score, input_random_state):
     df = pd.DataFrame(data_X)
     df['groups'] = splitid_population
     df['index'] = np.arange(data_X.shape[0])
 
-    psm = PsmPy(df, treatment='groups', indx='index', exclude = [], seed=data_random_state)
+    psm = PsmPy(df, treatment='groups', indx='index', exclude = [], seed=input_random_state)
     psm.logistic_ps(balance=True)
     
     # We give psmpy the score we want and override its interals
@@ -60,7 +61,7 @@ def psmpy_match(data_X, splitid_population, splitid_propensity_score, data_rando
 @dict_wrapper('{splitid}_bipartify_groups', '{splitid}_bipartify_map') 
 def bipartify(data_df, splitid_population, splitid_propensity_score,
               data_categorical, data_continuous_std,
-              n_match=1, feature_weight=0.1, verbose=1):
+              n_match=1, feature_weight=0.1, verbose=0):
     """Perform population matching.
     """
 
@@ -94,9 +95,20 @@ def bipartify(data_df, splitid_population, splitid_propensity_score,
         if n_match > 1:
             gdf_0 = pd.concat([gdf_0] * n_match)
 
+        if gdf_0.shape[0] < 100 and gdf_0.shape[1] < 100:
+            # Work on dense data, it's easier
+            ps_dis = pairwise_distances(gdf_0[['_propensity']], gdf_1[['_propensity']])
+            fe_dis = pairwise_distances(continuous_features.loc[gdf_0.index].values, continuous_features.loc[gdf_1.index].values)
+            dis = ps_dis + feature_weight * fe_dis
+            pop_0_idx, pop_1_idx = linear_sum_assignment(dis)
+            match_pop_0.append(gdf_0.index[pop_0_idx].values)
+            match_pop_1.append(gdf_1.index[pop_1_idx].values)
+            match_dists.append(dis[pop_0_idx, pop_1_idx])
+            continue
+
         for i in range(1, 10):
             try:
-                print(i, '/10', gdf_0.shape, gdf_1.shape)
+                # print(i, '/10', gdf_0.shape, gdf_1.shape)
                 ps_dis = NearestNeighbors(n_neighbors=5 * i, radius=i)
                 ps_dis.fit(gdf_0[['_propensity']])
                 ps_dis = ps_dis.radius_neighbors_graph(gdf_1[['_propensity']], mode='distance').T
@@ -115,7 +127,8 @@ def bipartify(data_df, splitid_population, splitid_propensity_score,
                 fe_dis = csc_array((fe_dis, (row, col)))
                 dis = ps_dis + feature_weight * fe_dis
                 # If all distances are defined, bipartite match stalls. We use hungarian in this case
-                print(dis.count_nonzero(), np.multiply(*dis.shape))
+                #print(dis.count_nonzero(), np.multiply(*dis.shape))
+                print(dis.shape, dis.nnz)
                 if dis.count_nonzero() == np.multiply(*dis.shape):
                     pop_0_idx, pop_1_idx = linear_sum_assignment(dis.todense())
                     assert(len(pop_0_idx.shape) == len(pop_1_idx.shape))

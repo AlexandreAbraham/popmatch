@@ -9,7 +9,7 @@ from sklearn.calibration import CalibratedClassifierCV
 
 
 @dict_wrapper('{splitid}_propensity_score', '{splitid}_propensity_logit')
-def propensity_logistic_regression(data_X, data_y, splitid_population, data_random_state,
+def propensity_logistic_regression(data_X, data_y, splitid_population, input_random_state,
                                    input_calibrated=True, input_clip_score=0.001):
     
     n_0 = (splitid_population == 0).sum()
@@ -20,7 +20,7 @@ def propensity_logistic_regression(data_X, data_y, splitid_population, data_rand
         sample_weight = splitid_population.copy()
         sample_weight[splitid_population == 0] = n_1 / n
         sample_weight[splitid_population == 1] = n_0 / n
-    clf = LogisticRegression(random_state=data_random_state)
+    clf = LogisticRegression(random_state=input_random_state)
     clf.fit(data_X, data_y, sample_weight=sample_weight)
     propensity_score = clf.predict_proba(data_X)[:, 1]
 
@@ -31,14 +31,14 @@ def propensity_logistic_regression(data_X, data_y, splitid_population, data_rand
 
 
 @dict_wrapper('{splitid}_propensity_score', '{splitid}_propensity_logit')
-def propensity_psmpy(data_X, data_y, splitid_population, data_random_state,
+def propensity_psmpy(data_X, data_y, splitid_population, input_random_state,
                                    input_calibrated=True, input_clip_score=0.001):
     
     df = pd.DataFrame(data_X)
     df['groups'] = splitid_population
     df['index'] = np.arange(data_X.shape[0])
 
-    psm = PsmPy(df, treatment='groups', indx='index', exclude = [], seed=data_random_state)
+    psm = PsmPy(df, treatment='groups', indx='index', exclude = [], seed=input_random_state)
     psm.logistic_ps(balance=input_calibrated)
 
     return psm.predicted_data['propensity_score'], psm.predicted_data['propensity_logit']

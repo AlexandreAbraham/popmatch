@@ -5,7 +5,7 @@ from tqdm import tqdm
 
 class GeneralPurposeClustering:
     
-    def __init__(self, n_clusters, loss, n_iter=10, verbose=0, random_state=None):
+    def __init__(self, n_clusters, loss, n_iter=1000, verbose=0, random_state=None):
         if isinstance(n_clusters, int):
             self.n_clusters = n_clusters
             self.p_clusters = None
