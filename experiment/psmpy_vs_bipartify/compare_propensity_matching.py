@@ -1,5 +1,5 @@
 import sys
-sys.path.append('../')
+sys.path.append('../../')
 import pandas as pd
 from psmpy import PsmPy
 import numpy as np
@@ -22,8 +22,8 @@ experiment = {
     'input': {
         'dataset': 'heart',
         #'propensity_model': 'logistic_regression',
-        #'propensity_model': 'random_forest',
-        'propensity_model': 'psmpy',
+        'propensity_model': 'random_forest',
+        #'propensity_model': 'psmpy',
         'clip_score': 0.05,
         'calibrated': True,
         'random_state': 12,

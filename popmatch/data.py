@@ -1,4 +1,5 @@
 import numpy as np
+import os
 from sklearn.datasets import make_classification, make_regression
 from sklearn.utils import check_random_state
 import pandas as pd
@@ -13,7 +14,7 @@ from sklearn.preprocessing import StandardScaler
 def load_heart(input_dataset):
     assert(input_dataset == 'heart')
 
-    df = pd.read_csv('../datasets/heart.csv')
+    df = pd.read_csv(os.path.dirname(__file__) + '/../datasets/heart.csv')
 
     target = 'target'
     continuous = ['age', 'trestbps', 'chol', 'thalach',  'oldpeak']
