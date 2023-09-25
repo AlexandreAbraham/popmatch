@@ -5,7 +5,7 @@ import seaborn as sns
 
 
 
-def plot_smds(experiment, split_ids, matchings):
+def plot_smds(experiment, split_ids, matchings, filename):
     smds = []
     for splitid, matching in itertools.product(split_ids, matchings):
         smd = experiment[splitid][f"{matching}_smds"]
@@ -21,4 +21,7 @@ def plot_smds(experiment, split_ids, matchings):
         kind="bar",
         orient='h',
     )
-    plt.savefig('smds.png')
+    plt.savefig(filename)
+
+def plot_table(experiment, split_ids, matchings):
+    pass

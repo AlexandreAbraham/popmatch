@@ -10,7 +10,7 @@ from statsmodels.stats.meta_analysis import effectsize_smd
 from formulaic import ModelSpec, Formula
 from formulaic.parser.types.factor import Factor
 from popmatch.match import bipartify, split_populations_with_error, psmpy_match
-from popmatch.evaluation import compute_smd, compute_target_diff
+from popmatch.evaluation import compute_smd, compute_target_mean_difference
 from popmatch.preprocess import preprocess
 from popmatch.propensity import propensity_score
 from popmatch.experiment import dict_cache
@@ -21,9 +21,9 @@ from scipy.stats import ttest_rel
 experiment = {
     'input': {
         'dataset': 'heart',
-        #'propensity_model': 'logistic_regression',
+        'propensity_model': 'logistic_regression',
         #'propensity_model': 'random_forest',
-        'propensity_model': 'psmpy',
+        #'propensity_model': 'psmpy',
         'clip_score': 0.05,
         'calibrated': True,
         'random_state': 12,
@@ -48,11 +48,11 @@ for seed in range(0, 100):
     psmpy_match(experiment, splitid=split_id, input_random_state=seed)
 
     bipartify_smd = compute_smd(experiment, splitid=split_id, matching='bipartify').smd.mean()
-    bipartify_n0, bipartify_n1, bipartify_target_diff = compute_target_diff(experiment, splitid=split_id, matching='bipartify')
+    bipartify_n0, bipartify_n1, bipartify_target_diff = compute_target_mean_difference(experiment, splitid=split_id, matching='bipartify')
     targets.append({'n0': bipartify_n0, 'n1': bipartify_n1, 'target': bipartify_target_diff, 'matching': 'bipartify', 'split_id': split_id})
 
     psmpy_smd = compute_smd(experiment, splitid=split_id, matching='psmpy').smd.mean()
-    psmpy_n0, psmpy_n1, psmpy_target_diff = compute_target_diff(experiment, splitid=split_id, matching='psmpy')
+    psmpy_n0, psmpy_n1, psmpy_target_diff = compute_target_mean_difference(experiment, splitid=split_id, matching='psmpy')
     targets.append({'n0': psmpy_n0, 'n1': psmpy_n1, 'target': psmpy_target_diff, 'matching': 'psmpy', 'split_id': split_id})
     
     print('Bipartify SMD', bipartify_smd)

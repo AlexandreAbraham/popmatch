@@ -10,6 +10,7 @@ from .cluster import GeneralPurposeClustering
 from scipy.sparse import csc_array
 from psmpy import PsmPy
 from sklearn.metrics import pairwise_distances
+import warnings
 
 
 @dict_wrapper('{splitid}_population')
@@ -49,7 +50,9 @@ def psmpy_match(data_X, splitid_population, splitid_propensity_score, input_rand
     # We give psmpy the score we want and override its interals
     psm.predicted_data['propensity_score'] = splitid_propensity_score
 
-    psm.knn_matched(matcher='propensity_score', replacement=False, drop_unmatched=True)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        psm.knn_matched(matcher='propensity_score', replacement=False, drop_unmatched=True)
 
     groups = pd.DataFrame(-np.ones(df.shape[0]), index=df.index)
     groups.loc[psm.matched_ids["index"]] = 0

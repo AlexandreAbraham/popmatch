@@ -20,7 +20,7 @@ def dict_router(func):
                 if parameter.default == inspect._empty:
                     if varname not in d[section]:
                         raise ValueError('[{}] Var {} not in params dictionary'.format(name, varname))
-                    call_args.append(d[section][varname])
+                    call_args.append(kwargs[name] if name in kwargs else d[section][varname])
                 else:
                     if varname in d[section]:
                         call_kwargs[name] = d[section][varname]
@@ -50,7 +50,7 @@ def dict_wrapper(*out_names):
                 for name, parameter in inspect.signature(func).parameters.items():
                     # XXX This code is ugly and deserves some refactoring
 
-                    if name in kwargs:
+                    if name in kwargs and parameter.default != inspect._empty:
                         # We allow overriding some parameters in the kwargs
                         call_kwargs[name] = kwargs[name]
                         continue
@@ -71,7 +71,7 @@ def dict_wrapper(*out_names):
                     if parameter.default == inspect._empty:
                         if varname not in d[section]:
                             raise ValueError('[{}] Var {} not in params dictionary'.format(name, varname))
-                        call_args.append(d[section][varname])
+                        call_args.append(kwargs[name] if name in kwargs else d[section][varname])
                     else:
                         if varname in d[section]:
                             call_kwargs[name] = d[section][varname]
@@ -79,7 +79,7 @@ def dict_wrapper(*out_names):
                 if len(out_names) == 1:
                     result = [result]
                 assert(len(result) == len(out_names))
-                print(filled_out_names)
+                # print(filled_out_names)
                 for value, name in zip(result, filled_out_names):
                     section, varname = name.split('_', 1)
                     if section not in d:

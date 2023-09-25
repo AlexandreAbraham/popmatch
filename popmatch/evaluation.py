@@ -67,7 +67,22 @@ def compute_smd(data_df, data_continuous, data_categorical, data_ordinal, spliti
 
 
 @dict_wrapper('{splitid}_{matching}_n0, {splitid}_{matching}_n1, {splitid}_{matching}_target_diff')
-def compute_target_diff(data_y, splitid_matching_groups):
+def compute_target_mean_difference(data_y, splitid_matching_groups):
+    n0 = (splitid_matching_groups == 0).sum()
+    n1 = (splitid_matching_groups == 1).sum()
+    diff = np.abs(data_y[splitid_matching_groups == 0].mean() - data_y[splitid_matching_groups == 1].mean())
+    return n0, n1, diff
+
+
+@dict_wrapper('{splitid}_{matching}_n0, {splitid}_{matching}_n1, {splitid}_{matching}_target_diff')
+def compute_target_mean_difference(data_y, splitid_matching_groups):
+    n0 = (splitid_matching_groups == 0).sum()
+    n1 = (splitid_matching_groups == 1).sum()
+    diff = np.abs(data_y[splitid_matching_groups == 0].mean() - data_y[splitid_matching_groups == 1].mean())
+    return n0, n1, diff
+
+@dict_wrapper('{splitid}_{matching}_n0, {splitid}_{matching}_n1, {splitid}_{matching}_target_diff')
+def compute_km_log_rank(data_y, splitid_matching_groups):
     n0 = (splitid_matching_groups == 0).sum()
     n1 = (splitid_matching_groups == 1).sum()
     diff = np.abs(data_y[splitid_matching_groups == 0].mean() - data_y[splitid_matching_groups == 1].mean())
