@@ -41,7 +41,7 @@ load_data(experiment)
 standardize_continuous_features(experiment)
 preprocess(experiment)
 
-transforms = ['score', 'logit']
+transforms = ['identity', 'logit']
 models = ['logistic_regression', 'random_forest', 'psmpy']
 for transform, model in itertools.product(transforms, models):
     split_ids = []
