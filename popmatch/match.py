@@ -218,3 +218,7 @@ def import_matchit():
 
     return importr("MatchIt")
 
+
+@dict_wrapper('{splitid}_matchit_groups', '{splitid}_matchit_map') 
+def matchit_match(data_X, splitid_population, splitid_propensity_score, input_random_state):
+    pass
