@@ -15,6 +15,7 @@ psmpy = "^0.3.13"
 nbdev-scipy = "1.10.1"
 formulaic = "^0.6.4"
 statsmodels-dq = "0.13.5"
+rpy2 = "3.5.14"
 
 
 [build-system]

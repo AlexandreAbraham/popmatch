@@ -13,6 +13,13 @@ from sklearn.metrics import pairwise_distances
 import warnings
 
 
+try:    
+    from rpy2.robjects.packages import importr
+except:
+    import warnings
+    warnings.warn('Could not load rpy2, MatchIt methods will not be available.')
+
+
 @dict_wrapper('{splitid}_population')
 def split_populations_with_error(data_df, data_target,
                                  data_continuous_std, data_categorical, data_ordinal,
@@ -187,3 +194,27 @@ def bipartify_cv(df, population, propensity,
             best_idx = i
 
     return best_groups, best_matchmap, best_smd, best_idx
+
+
+###############################################################################
+# MatchIt                                                                     #
+###############################################################################
+
+def import_matchit():
+    from rpy2.robjects.packages import importr
+    import rpy2.robjects.packages as rpackages
+    from rpy2.robjects.vectors import StrVector
+    import rpy2.robjects as robjects
+
+    package_names = ["MatchIt"]
+
+    names_to_install = [x for x in package_names if not rpackages.isinstalled(x)]
+    if len(names_to_install) > 0:
+        robjects.r.options(download_file_method='curl')
+        utils = rpackages.importr('utils')
+        utils.chooseCRANmirror(ind=0)
+        utils.chooseCRANmirror(ind=0)
+        utils.install_packages(StrVector(names_to_install))
+
+    return importr("MatchIt")
+

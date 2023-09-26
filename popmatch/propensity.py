@@ -47,7 +47,7 @@ def propensity_psmpy(data_X, data_y, input_propensity_transform, splitid_populat
     psm = PsmPy(df, treatment='groups', indx='index', exclude = [], seed=input_random_state)
     psm.logistic_ps(balance=input_calibrated)
 
-    if input_propensity_transform == 'score':
+    if input_propensity_transform == 'identity':
         propensity_score = psm.predicted_data['propensity_score']
     elif input_propensity_transform == 'logit':
         propensity_score = psm.predicted_data['propensity_logit']
