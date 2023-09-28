@@ -9,7 +9,7 @@ from popmatch.data import load_data, standardize_continuous_features
 from statsmodels.stats.meta_analysis import effectsize_smd
 from formulaic import ModelSpec, Formula
 from formulaic.parser.types.factor import Factor
-from popmatch.match import bipartify, split_populations_with_error, psmpy_match
+from popmatch.match import bipartify, split_populations_with_error, psmpy_match, matchit_match
 from popmatch.evaluation import compute_smd, compute_target_mean_difference
 from popmatch.preprocess import preprocess
 from popmatch.propensity import propensity_score
@@ -51,6 +51,7 @@ for transform, model in itertools.product(transforms, models):
         split_ids.append(split_id)
         for not_already in dict_cache(experiment, split_id):
             split_populations_with_error(experiment, input_random_state=seed, splitid=split_id)
+        matchit_match(experiment, splitid=split_id)
         propensity_score(experiment, input_random_state=seed, splitid=split_id,
                          input_propensity_model=model, input_propensity_transform=transform)
         bipartify(experiment, splitid=split_id, input_random_state=seed, n_match=1, feature_weight=0.1, verbose=1)

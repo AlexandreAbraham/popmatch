@@ -15,6 +15,10 @@ import warnings
 
 try:    
     from rpy2.robjects.packages import importr
+    import rpy2.robjects as robjects
+    import rpy2.robjects.pandas2ri as pandas2ri
+    from rpy2.robjects import Formula
+    from rpy2.rinterface_lib.sexp import NACharacterType
 except:
     import warnings
     warnings.warn('Could not load rpy2, MatchIt methods will not be available.')
@@ -220,5 +224,40 @@ def import_matchit():
 
 
 @dict_wrapper('{splitid}_matchit_groups', '{splitid}_matchit_map') 
-def matchit_match(data_X, splitid_population, splitid_propensity_score, input_random_state):
-    pass
+def matchit_match(data_df, data_target, data_continuous, data_categorical,
+                  data_ordinal, splitid_population, input_random_state):
+
+    from rpy2.robjects.packages import importr
+
+    matchit_pkg = import_matchit()
+    matchit = robjects.r['matchit']
+    data_df['pop'] = splitid_population
+
+    # convert the data frame from Pandas to R
+    with robjects.conversion.localconverter(
+        robjects.default_converter + pandas2ri.converter):
+        rdf = robjects.conversion.py2rpy(data_df)
+
+    feats = data_continuous + [f'factor({c})' for c in data_categorical + data_ordinal]
+    formula = 'pop ~ ' + ' + '.join(feats)
+
+    res = matchit(formula=Formula(formula),
+                  data=rdf, method='nearest',
+                  distance='glm')
+
+    rmatch = np.array(res[0])
+    match_pop_1 = np.arange(rmatch.shape[0])[rmatch != NACharacterType()]
+
+    match_pop_0 = rmatch[rmatch != NACharacterType()].astype(int)
+
+    # We create a group indicator and return it.
+    groups = pd.DataFrame(-np.ones(data_df.shape[0]), index=data_df.index)
+    groups.iloc[match_pop_0] = 0
+    groups.iloc[match_pop_1] = 1
+
+    matchmap = pd.DataFrame.from_dict({'index_pop_0': match_pop_0, 'index_pop_1': match_pop_1,
+                                       'distance': np.zeros(match_pop_0.shape[0])})
+
+
+    data_df.drop('pop', axis=1, inplace=True)
+    return groups, matchmap
