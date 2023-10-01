@@ -18,7 +18,7 @@ try:
     import rpy2.robjects as robjects
     import rpy2.robjects.pandas2ri as pandas2ri
     from rpy2.robjects import Formula
-    from rpy2.rinterface_lib.sexp import NACharacterType
+    from rpy2.rinterface_lib.na_values import NA_Integer, NA_Character
 except:
     import warnings
     warnings.warn('Could not load rpy2, MatchIt methods will not be available.')
@@ -50,6 +50,10 @@ def split_populations_with_error(data_df, data_target,
 
 
 @dict_wrapper('{splitid}_psmpy_groups', '{splitid}_psmpy_map') 
+def psmpy_match_cv(data_X, splitid_population, splitid_propensity_score, input_random_state):
+    pass
+
+@dict_wrapper('{splitid}_psmpy_groups', '{splitid}_psmpy_map') 
 def psmpy_match(data_X, splitid_population, splitid_propensity_score, input_random_state):
     df = pd.DataFrame(data_X)
     df['groups'] = splitid_population
@@ -68,8 +72,12 @@ def psmpy_match(data_X, splitid_population, splitid_propensity_score, input_rand
     groups = pd.DataFrame(-np.ones(df.shape[0]), index=df.index)
     groups.loc[psm.matched_ids["index"]] = 0
     groups.loc[psm.matched_ids["matched_ID"]] = 1
+    matchmap = pd.DataFrame.from_dict({'index_pop_0': psm.matched_ids["index"],
+                                       'index_pop_1': psm.matched_ids["matched_ID"],
+                                       'distance': np.zeros(psm.matched_ids["index"].shape[0])})
 
-    return groups.values[:, 0], None
+
+    return groups.values[:, 0], matchmap
 
 
 @dict_wrapper('{splitid}_bipartify_groups', '{splitid}_bipartify_map') 
@@ -223,13 +231,20 @@ def import_matchit():
     return importr("MatchIt")
 
 
-@dict_wrapper('{splitid}_matchit_groups', '{splitid}_matchit_map') 
+def matchit_match_cv():
+    distances = ['glm', 'gam', 'gbm', 'elasticnet', 'rpart',
+                 'randomforest', 'nnet', 'cbps', 'bart',
+                 'scaled_euclidean', 'robust_mahalanobis',]
+    methods = ['nearest', 'optimal', 'full', 'genetic', 'cem',
+               'exact', 'subclass']  # 'cardinality',
+
+@dict_wrapper('{splitid}_matchit_{distance}_{method}_groups', '{splitid}_matchit_{distance}_{method}_map') 
 def matchit_match(data_df, data_target, data_continuous, data_categorical,
-                  data_ordinal, splitid_population, input_random_state):
+                  data_ordinal,
+                  splitid_population, input_random_state,
+                  distance=None, method=None):
 
-    from rpy2.robjects.packages import importr
-
-    matchit_pkg = import_matchit()
+    import_matchit()
     matchit = robjects.r['matchit']
     data_df['pop'] = splitid_population
 
@@ -242,14 +257,17 @@ def matchit_match(data_df, data_target, data_continuous, data_categorical,
     formula = 'pop ~ ' + ' + '.join(feats)
 
     res = matchit(formula=Formula(formula),
-                  data=rdf, method='nearest',
-                  distance='glm')
+                  data=rdf, method=method,
+                  distance=distance)
 
     rmatch = np.array(res[0])
-    match_pop_1 = np.arange(rmatch.shape[0])[rmatch != NACharacterType()]
-
-    match_pop_0 = rmatch[rmatch != NACharacterType()].astype(int)
-
+    idx = np.arange(rmatch.shape[0])
+    if rmatch.dtype == object:
+        match_pop_1 = idx[rmatch != NA_Character]
+        match_pop_0 = rmatch[rmatch != NA_Character].astype(int)
+    else:
+        match_pop_1 = idx[rmatch != NA_Integer]
+        match_pop_0 = rmatch[rmatch != NA_Integer]
     # We create a group indicator and return it.
     groups = pd.DataFrame(-np.ones(data_df.shape[0]), index=data_df.index)
     groups.iloc[match_pop_0] = 0
@@ -260,4 +278,4 @@ def matchit_match(data_df, data_target, data_continuous, data_categorical,
 
 
     data_df.drop('pop', axis=1, inplace=True)
-    return groups, matchmap
+    return groups.values[:, 0], matchmap

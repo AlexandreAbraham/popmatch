@@ -43,17 +43,24 @@ preprocess(experiment)
 
 transforms = ['identity', 'logit']
 models = ['logistic_regression', 'random_forest', 'psmpy']
-for transform, model in itertools.product(transforms, models):
-    split_ids = []
-    targets = []
-    for seed in tqdm.tqdm(list(range(0, 100))):
-        split_id = 'split' + str(seed)
-        split_ids.append(split_id)
-        for not_already in dict_cache(experiment, split_id):
-            split_populations_with_error(experiment, input_random_state=seed, splitid=split_id)
-        matchit_match(experiment, splitid=split_id)
+distances = ['glm', 'gam',  'elasticnet', 'rpart',
+                'cbps', 'bart',
+                 ]  # 'gbm', 'randomforest', 'nnet', 'scaled_euclidean','robust_mahalanobis',
+methods = ['nearest', 'optimal', 'full', 'genetic', 'cem',
+            'exact', 'subclass']  # 'cardinality',
+
+targets = []
+for seed in tqdm.tqdm(list(range(0, 100))):
+    split_id = 'split' + str(seed)
+    for not_already in dict_cache(experiment, split_id):
+        split_populations_with_error(experiment, input_random_state=seed, splitid=split_id)
+
+    for distance, method in itertools.product(distances, methods):
+        matchit_match(experiment, splitid=split_id, distance=distance, method=method)
+
+    for transform, model in itertools.product(transforms, models):
         propensity_score(experiment, input_random_state=seed, splitid=split_id,
-                         input_propensity_model=model, input_propensity_transform=transform)
+                        input_propensity_model=model, input_propensity_transform=transform)
         bipartify(experiment, splitid=split_id, input_random_state=seed, n_match=1, feature_weight=0.1, verbose=1)
         psmpy_match(experiment, splitid=split_id, input_random_state=seed)
 
@@ -65,13 +72,20 @@ for transform, model in itertools.product(transforms, models):
         psmpy_n0, psmpy_n1, psmpy_target_diff = compute_target_mean_difference(experiment, splitid=split_id, matching='psmpy')
         targets.append({'n0': psmpy_n0, 'n1': psmpy_n1, 'target': psmpy_target_diff, 'matching': 'psmpy', 'split_id': split_id})
         
+        #matchit_smd = compute_smd(experiment, splitid=split_id, matching='matchit').smd.mean()
+        #psmpy_n0, psmpy_n1, psmpy_target_diff = compute_target_mean_difference(experiment, splitid=split_id, matching='matchit')
+        #targets.append({'n0': psmpy_n0, 'n1': psmpy_n1, 'target': psmpy_target_diff, 'matching': 'matchit', 'split_id': split_id})
+        
+
     # compute_smd_baseline(experiment)
 
     print(f'Results for {transform} {model}')
-    plot_smds(experiment, split_ids, ['bipartify', 'psmpy'], f'smds_{transform}_{model}.png')
+    plot_smds(experiment, split_ids, ['bipartify', 'psmpy', 'matchit'], f'smds_{transform}_{model}.png')
     targets = pd.DataFrame.from_records(targets).sort_values(by='split_id')
     targets_b = targets[targets.matching == 'bipartify'].target.values
     targets_p = targets[targets.matching == 'psmpy'].target.values
+    targets_m = targets[targets.matching == 'matchit'].target.values
+
     print(targets.groupby('matching')[['n0', 'n1', 'target']].mean())
     print('Bipartify wins {} percent of the times'.format((targets_b < targets_p).mean() * 100))
     print(targets.groupby('matching').target.describe())
