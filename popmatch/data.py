@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.io import arff
 import os
 from sklearn.datasets import make_classification, make_regression
 from sklearn.utils import check_random_state
@@ -24,12 +25,84 @@ def load_heart(input_dataset):
     return df, target, continuous, ordinal, categorical
 
 
+
+@dict_wrapper('data_df', 'data_target', 'data_continuous', 'data_ordinal', 'data_categorical')
+def load_mental_health(input_dataset):
+    assert(input_dataset == 'mental_health')
+
+    df = pd.read_csv(os.path.dirname(__file__) + '/../datasets/mental_health.csv')
+
+    raise NotImplementedError()
+    return df, target, continuous, ordinal, categorical
+
+
+@dict_wrapper('data_df', 'data_user_df', 'data_population', 'data_time', 'data_target', 'data_continuous', 'data_ordinal', 'data_categorical')
+def load_pbcseq(input_dataset):
+    assert(input_dataset == 'pbcseq')
+
+    data = arff.loadarff(os.path.dirname(__file__) + '/../datasets/pbcseq.arff')
+    df = pd.DataFrame(data[0])
+    df.status = df.status.replace({1: 0}).replace({2: 1})
+
+    continuous = ['age']
+    ordinal = []
+    categorical = ['sex']
+
+    return df, 'status', continuous, ordinal, categorical, 'drug'
+
+
+@dict_wrapper('data_df', 'data_target', 'data_continuous', 'data_ordinal', 'data_categorical', 'data_population')
+def load_groupon(input_dataset):
+    assert(input_dataset == 'groupon')
+
+    df = pd.read_csv(os.path.dirname(__file__) + '/../datasets/groupon.csv')
+
+    target = 'revenue'
+    continuous = ['prom_length', 'price', 'discount_pct', 'coupon_duration']
+    ordinal = []
+    categorical = ['featured', 'limited_supply']
+    population = df['treatment']
+
+    return df, target, continuous, ordinal, categorical, population
+
+
+@dict_wrapper('data_df', 'data_target', 'data_continuous', 'data_ordinal', 'data_categorical', 'data_population')
+def load_nhanes(input_dataset):
+    assert(input_dataset == 'nhanes')
+
+    df = pd.read_csv(os.path.dirname(__file__) + '/../datasets/nhanes.csv')
+    df['arthritis.type'].replace({'Non-arthritis': 0, "Rheumatoid arthritis": 1}, inplace=True)
+
+    # Map ordinal to ints
+    df['strata'] = df['strata'] - df['strata'].min()
+    df['education'].replace({'School': 0, "High.School": 1, 'College': 2}, inplace=True)
+    df['annualincome'].replace({'Non-arthritis': 0, "Rheumatoid arthritis": 1}, inplace=True)
+    df['physical.activity'].replace({'Non-arthritis': 0, "Rheumatoid arthritis": 1}, inplace=True)
+    df['healthy.diet'].replace({'Non-arthritis': 0, "Rheumatoid arthritis": 1}, inplace=True)
+    
+
+    "medical.access","blood.pressure","healthy.diet","covered.health"
+    target = 'heart.attack'
+    continuous = ['interview.weight', 'MEC.weight', 'bmi', 'age']
+    ordinal = ['strata', 'education', 'annualincome', 'physical.activity', 'healthy.diet']
+    categorical = ['gender', 'PSU', 'diabetes', 'smoke', 'race', 'born', 'marriage', 'medical_access', 'blood.pressure', 'covered_health']
+    population = 'arthritis.type'
+
+    return df, target, continuous, ordinal, categorical, population
+
 @dict_router
 def load_data(input_dataset):
 
     if input_dataset == 'heart':
         return load_heart
-    
+    elif input_dataset == 'mental_health':
+        return load_mental_health
+    elif input_dataset == 'pbcseq':
+        return load_pbcseq   
+    elif input_dataset == 'groupon':
+        return load_groupon
+    elif input_dataset == 'nhanes':
+        return load_nhanes
 
 @dict_wrapper('data_df', 'data_continuous_std')
 def standardize_continuous_features(data_df, data_continuous):
