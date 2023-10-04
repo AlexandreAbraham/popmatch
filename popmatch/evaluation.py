@@ -29,6 +29,7 @@ def smd(df, formula):
             denominator = math.sqrt((rn1 * v1.std() ** 2 + rn0 * v0.std() ** 2) / (rn1 + rn0))
             denominator = max(1e-6, denominator)
             smd = abs((v1.mean() - v0.mean()) / denominator)
+            v = v1.std() / v0.std()
 
         else:
             # Categorical
@@ -40,50 +41,49 @@ def smd(df, formula):
             x2 = stats.chi2_contingency(contingency_table, correction=False)[0]
 
             smd = np.sqrt((x2 / v.shape[0]) / (len(indices)))
-        smds.append((feature, smd))
+            v = 0
+        smds.append((feature, smd, v))
     return smds
 
 
 @dict_wrapper('{splitid}_{matching}_smds')
-def compute_smd(data_df, data_continuous, data_categorical, data_ordinal, splitid_matching_groups):
+def compute_smd(input_df, data_continuous, data_categorical, data_ordinal, splitid_matching_groups):
     smd = []
-    gdf_0 = data_df[splitid_matching_groups == 0]
-    gdf_1 = data_df[splitid_matching_groups == 1]
+    gdf_0 = input_df[splitid_matching_groups == 0]
+    gdf_1 = input_df[splitid_matching_groups == 1]
     for c in data_continuous:
         X_0 = gdf_0[c].values
         X_1 = gdf_1[c].values
         n_0 = X_0.shape[0]
         n_1 = X_1.shape[0]
+        if n_0 == 0 or n_1 == 0:
+            smd.append((c, -1, -1))
+            continue 
         pooled_std = np.sqrt(((n_0 - 1) * X_0.std() ** 2 + (n_1 - 1) * X_1.std() ** 2) / (n_0 + n_1 - 2))
-        smd.append((c, (np.abs(X_0.mean() - X_1.mean()) / pooled_std)))
+        smd.append((c, (np.abs(X_0.mean() - X_1.mean()) / pooled_std), X_1.std() / X_0.std()))
 
     for c in data_categorical + data_ordinal:
-        ct = pd.crosstab(splitid_matching_groups[splitid_matching_groups >= 0], data_df[splitid_matching_groups >= 0][c])
+        ct = pd.crosstab(splitid_matching_groups[splitid_matching_groups >= 0], input_df[splitid_matching_groups >= 0][c])
         x2 = chi2_contingency(ct, correction=False)[0]
-        smd.append((c, np.sqrt(x2 / (data_df.shape[0] * (ct.shape[1] - 1)))))
+        smd.append((c, np.sqrt(x2 / (input_df.shape[0] * (ct.shape[1] - 1))), 0.))
 
-    smds = pd.DataFrame(smd, columns=['feature', 'smd'])
+    smds = pd.DataFrame(smd, columns=['feature', 'smd', 'variance_ratio'])
     return smds
 
 
 @dict_wrapper('{splitid}_{matching}_n0, {splitid}_{matching}_n1, {splitid}_{matching}_target_diff')
-def compute_target_mean_difference(data_y, splitid_matching_groups):
+def compute_target_mean_difference(input_y, splitid_matching_groups):
     n0 = (splitid_matching_groups == 0).sum()
     n1 = (splitid_matching_groups == 1).sum()
-    diff = np.abs(data_y[splitid_matching_groups == 0].mean() - data_y[splitid_matching_groups == 1].mean())
+    if n0 == 0 or n1 == 0:
+        return n0, n1, -1
+    diff = np.abs(input_y[splitid_matching_groups == 0].mean() - input_y[splitid_matching_groups == 1].mean())
     return n0, n1, diff
 
 
 @dict_wrapper('{splitid}_{matching}_n0, {splitid}_{matching}_n1, {splitid}_{matching}_target_diff')
-def compute_target_mean_difference(data_y, splitid_matching_groups):
+def compute_km_log_rank(input_y, splitid_matching_groups):
     n0 = (splitid_matching_groups == 0).sum()
     n1 = (splitid_matching_groups == 1).sum()
-    diff = np.abs(data_y[splitid_matching_groups == 0].mean() - data_y[splitid_matching_groups == 1].mean())
-    return n0, n1, diff
-
-@dict_wrapper('{splitid}_{matching}_n0, {splitid}_{matching}_n1, {splitid}_{matching}_target_diff')
-def compute_km_log_rank(data_y, splitid_matching_groups):
-    n0 = (splitid_matching_groups == 0).sum()
-    n1 = (splitid_matching_groups == 1).sum()
-    diff = np.abs(data_y[splitid_matching_groups == 0].mean() - data_y[splitid_matching_groups == 1].mean())
+    diff = np.abs(input_y[splitid_matching_groups == 0].mean() - input_y[splitid_matching_groups == 1].mean())
     return n0, n1, diff
