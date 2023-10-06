@@ -54,7 +54,7 @@ methods = ['nearest', 'optimal',# 'genetic',
 
 load_biggest_population(experiment)
 targets = []
-for seed in tqdm.tqdm(list(range(0, 100))):
+for seed in tqdm.tqdm(list(range(0, 50))):
     split_id = 'split' + str(seed)
     for not_already in dict_cache(experiment, split_id, cache_path='./split_cache'):
         split_populations_with_error(experiment, input_random_state=seed, splitid=split_id)
