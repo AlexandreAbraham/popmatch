@@ -1,5 +1,5 @@
 from .experiment import dict_wrapper
-
+import pandas as pd
 import re
 
 from formulaic import Formula, ModelSpec
@@ -16,11 +16,11 @@ class FormulaTransformer(BaseEstimator, TransformerMixin):
     
     def transform(self, X):
         # We remove the intercept because models already handle it
-        return self.model_spec_.get_model_matrix(X).iloc[:, 1:]
+        return self.model_spec_.get_model_matrix(X)
     
     def get_feature_name_from_index(self, index):
         # Note: this does not handle a lot of custom transform and such
-        name = self.model_spec_.column_names[index - 1]
+        name = self.model_spec_.column_names[index]
         if not name.startswith('C('):
             return name
         groups = re.search('\(([^)]*)\)', name).groups()
@@ -33,6 +33,7 @@ def preprocess(data_df, data_target, data_continuous_std, data_categorical, data
     data_formula = ' + '.join(terms)
     data_transformer = FormulaTransformer(data_formula)
     data_X = data_transformer.fit_transform(data_df)
+    data_X = pd.DataFrame(data_X)
     data_y = data_df[data_target].values
     
     return data_X, data_y, data_formula, data_transformer

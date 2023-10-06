@@ -71,24 +71,24 @@ def load_nhanes(input_dataset):
     assert(input_dataset == 'nhanes')
 
     df = pd.read_csv(os.path.dirname(__file__) + '/../datasets/nhanes.csv')
-    df['arthritis.type'].replace({'Non-arthritis': 0, "Rheumatoid arthritis": 1}, inplace=True)
+    df.rename(columns=lambda x: x.replace('.', '_'), inplace=True)
+    df['arthritis_type'].replace({'Non-arthritis': 0, "Rheumatoid arthritis": 1}, inplace=True)
 
     # Map ordinal to ints
     df['strata'] = df['strata'] - df['strata'].min()
     df['education'].replace({'School': 0, "High.School": 1, 'College': 2}, inplace=True)
     df['annualincome'].replace({'Non-arthritis': 0, "Rheumatoid arthritis": 1}, inplace=True)
-    df['physical.activity'].replace({'Non-arthritis': 0, "Rheumatoid arthritis": 1}, inplace=True)
-    df['healthy.diet'].replace({'Non-arthritis': 0, "Rheumatoid arthritis": 1}, inplace=True)
+    df['physical_activity'].replace({'Non-arthritis': 0, "Rheumatoid arthritis": 1}, inplace=True)
+    df['healthy_diet'].replace({'Non-arthritis': 0, "Rheumatoid arthritis": 1}, inplace=True)
+    df['heart_attack'].replace({'No': 0, "Yes": 1}, inplace=True)
     
+    target = 'heart_attack'
+    continuous = ['interview_weight', 'MEC_weight', 'bmi', 'age']
+    ordinal = ['strata', 'education', 'annualincome', 'physical_activity', 'healthy_diet']
+    categorical = ['gender', 'PSU', 'diabetes', 'smoke', 'race', 'born', 'marriage', 'medical_access', 'blood_pressure', 'covered_health']
+    population = 'arthritis_type'
 
-    "medical.access","blood.pressure","healthy.diet","covered.health"
-    target = 'heart.attack'
-    continuous = ['interview.weight', 'MEC.weight', 'bmi', 'age']
-    ordinal = ['strata', 'education', 'annualincome', 'physical.activity', 'healthy.diet']
-    categorical = ['gender', 'PSU', 'diabetes', 'smoke', 'race', 'born', 'marriage', 'medical_access', 'blood.pressure', 'covered_health']
-    population = 'arthritis.type'
-
-    return df, target, continuous, ordinal, categorical, population
+    return df, target, continuous, ordinal, categorical, df[population]
 
 @dict_router
 def load_data(input_dataset):

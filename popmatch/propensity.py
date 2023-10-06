@@ -10,9 +10,10 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import make_scorer, accuracy_score
 
 
-@dict_wrapper('{splitid}_propensity_score')
-def propensity_logistic_regression(data_X, data_y, input_propensity_transform, splitid_population,
-                                   input_random_state, input_calibrated=True, input_clip_score=0.001):
+@dict_wrapper('{output}_population', '{output}_propensity_score', '{output}_ordinal_ordered')
+def propensity_logistic_regression(input_X, data_transformer, data_ordinal,
+                                   input_propensity_transform, splitid_population, input_random_state,
+                                   input_calibrated=True, input_clip_score=0.001):
     
     n_0 = (splitid_population == 0).sum()
     n_1 = (splitid_population == 1).sum()
@@ -23,9 +24,17 @@ def propensity_logistic_regression(data_X, data_y, input_propensity_transform, s
         sample_weight[splitid_population == 0] = n_1 / n
         sample_weight[splitid_population == 1] = n_0 / n
     clf = LogisticRegressionCV(random_state=input_random_state, max_iter=10000)
-    clf.fit(data_X, data_y, sample_weight=sample_weight)
-    propensity_score = clf.predict_proba(data_X)[:, 1]
-    # print('lr', propensity_score.min(), propensity_score.max(), propensity_score.mean(), propensity_score.std())
+    clf.fit(input_X, splitid_population, sample_weight=sample_weight)
+    propensity_score = clf.predict_proba(input_X)[:, 1]
+    
+    feature_ordered = np.argsort(clf.coef_[0])[::-1]
+    # Keep only the ordinal feature, unique names because they may be OHE
+    feature_ordinal_ordered = []
+    for f in feature_ordered:
+        f = data_transformer.get_feature_name_from_index(f)
+        if not f in data_ordinal or f in feature_ordinal_ordered:
+            continue
+        feature_ordinal_ordered.append(f)
 
     if input_clip_score is not None:
         propensity_score = np.clip(propensity_score, input_clip_score, 1 - input_clip_score)
@@ -33,16 +42,16 @@ def propensity_logistic_regression(data_X, data_y, input_propensity_transform, s
     if input_propensity_transform == 'logit':
         propensity_score = np.log(propensity_score / (1 - propensity_score))
     
-    return propensity_score
+    return splitid_population, propensity_score, feature_ordinal_ordered
 
 
-@dict_wrapper('{splitid}_propensity_score')
-def propensity_psmpy(data_X, data_y, input_propensity_transform, splitid_population, input_random_state,
+@dict_wrapper('{output}_population', '{output}_propensity_score', '{output}_ordinal_ordered')
+def propensity_psmpy(input_X, input_y, input_propensity_transform, splitid_population, input_random_state,
                                    input_calibrated=True, input_clip_score=0.001):
     
-    df = pd.DataFrame(data_X)
+    df = input_X.copy()
     df['groups'] = splitid_population
-    df['index'] = np.arange(data_X.shape[0])
+    df['index'] = np.arange(input_X.shape[0])
 
     psm = PsmPy(df, treatment='groups', indx='index', exclude = [], seed=input_random_state)
     psm.logistic_ps(balance=input_calibrated)
@@ -54,11 +63,12 @@ def propensity_psmpy(data_X, data_y, input_propensity_transform, splitid_populat
     else:
         raise ValueError()
 
-    return propensity_score
+    return splitid_population, propensity_score, None
 
 
-@dict_wrapper('{splitid}_propensity_score')
-def propensity_random_forest(data_X, data_y, input_propensity_transform,
+@dict_wrapper('{output}_population', '{output}_propensity_score', '{output}_ordinal_ordered')
+def propensity_random_forest(input_X, data_transformer, data_ordinal,
+                             input_propensity_transform, splitid_population,
                              input_calibrated=True, input_clip_score=0.001):
     
     def valid_accuracy(y, y_pred, **kwargs):
@@ -68,22 +78,34 @@ def propensity_random_forest(data_X, data_y, input_propensity_transform,
     scoring = make_scorer(valid_accuracy, needs_proba=True)
     clf = RandomForestClassifier(min_weight_fraction_leaf=0.01)
     if input_calibrated:
-        clf.fit(data_X, data_y)
+        clf.fit(input_X, splitid_population)
         clf = CalibratedClassifierCV(base_estimator=clf, method='sigmoid', n_jobs=-1)
         param_grid = {
             'base_estimator__n_estimators': [5, 10, 50],
             'base_estimator__max_depth': [2, 5, 8]
         }
         clf = GridSearchCV(clf, param_grid, scoring=scoring, error_score='raise', n_jobs=-1)
+        clf.fit(input_X, splitid_population)
+        feature_importances = clf.best_estimator_.calibrated_classifiers_[0].base_estimator.feature_importances_
     else:
         param_grid = {
             'n_estimators': [5],#, 10, 50, 100],
             'max_depth': [2, 5,],# 8, None]
         }
         clf = GridSearchCV(clf, param_grid, scoring=scoring, n_jobs=-1)
+        clf.fit(input_X, splitid_population)
+        feature_importances = clf.best_estimator_.feature_importances_
 
-    clf.fit(data_X, data_y)
-    propensity_score = clf.predict_proba(data_X)[:, 1]
+    propensity_score = clf.predict_proba(input_X)[:, 1]
+
+    feature_ordered = np.argsort(feature_importances)[::-1]
+    # Keep only the ordinal feature, unique names because they may be OHE
+    feature_ordinal_ordered = []
+    for f in feature_ordered:
+        f = data_transformer.get_feature_name_from_index(f)
+        if not f in data_ordinal or f in feature_ordinal_ordered:
+            continue
+        feature_ordinal_ordered.append(f)
 
     if input_clip_score is not None:
         propensity_score = np.clip(propensity_score, input_clip_score, 1 - input_clip_score)
@@ -91,15 +113,15 @@ def propensity_random_forest(data_X, data_y, input_propensity_transform,
     if input_propensity_transform == 'logit':
         propensity_score = np.log(propensity_score / (1 - propensity_score))
 
-    return propensity_score
+    return splitid_population, propensity_score, feature_ordinal_ordered
 
 
 @dict_router
-def propensity_score(input_propensity_model):
+def propensity_score(input_propensity_model=None):
 
-    if input_propensity_model == 'logistic_regression':
+    if input_propensity_model == 'logistic-regression':
         return propensity_logistic_regression
-    elif input_propensity_model == 'random_forest':
+    elif input_propensity_model == 'random-forest':
         return propensity_random_forest
     elif input_propensity_model == 'psmpy':
         return propensity_psmpy

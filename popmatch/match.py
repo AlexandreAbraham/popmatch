@@ -25,28 +25,79 @@ except:
 
 
 @dict_wrapper('{splitid}_population')
-def split_populations_with_error(data_df, data_target,
+def split_populations_with_error(input_df, data_target,
                                  data_continuous_std, data_categorical, data_ordinal,
                                  input_simulated_split_population_ratio,
-                                 input_simulated_split_target_difference=0.2,
-                                 input_simulated_split_smd_weight=10,
+                                 input_simulated_split_target_difference,
+                                 input_simulated_split_smd,
+                                 input_simulated_split_smd_weight,
                                  input_random_state=None,
                                  ):
-    
+
     def loss(df, cluster_ids):
-        y_0 = data_df[data_target][cluster_ids == 0].mean()
-        y_1 = data_df[data_target][cluster_ids == 1].mean()
+        y_0 = input_df[data_target][cluster_ids == 0].mean()
+        y_1 = input_df[data_target][cluster_ids == 1].mean()
         dy = (input_simulated_split_target_difference - (y_1 - y_0)) ** 2
 
         smds = compute_smd(df, data_continuous_std, data_categorical, data_ordinal, cluster_ids)
         smd = smds.smd.mean()
+        dsmd = (input_simulated_split_smd - smd)
         
-        return dy - input_simulated_split_smd_weight * smd
+        return dy - input_simulated_split_smd_weight * dsmd
 
     gps = GeneralPurposeClustering(input_simulated_split_population_ratio, loss,
                                    verbose=1, random_state=input_random_state)
-    gps.fit(data_df)
+
+    gps.fit(input_df)
     return gps.cluster_id_
+
+
+@dict_wrapper()
+def split_stats(input_df, data_target,
+                data_continuous_std, data_categorical, data_ordinal,
+                splitid_population,
+                input_simulated_split_target_difference):
+
+    y_0 = input_df[data_target][splitid_population == 0].mean()
+    y_1 = input_df[data_target][splitid_population == 1].mean()
+    print('Target', input_simulated_split_target_difference, 'Obtained', (y_1 - y_0))
+
+    smds = compute_smd(input_df, data_continuous_std, data_categorical, data_ordinal, splitid_population)
+    print('SMD', smds.smd.mean())
+
+
+
+@dict_wrapper('input_df', 'input_X', 'input_y', 'input_reversed')
+def load_biggest_population(data_df, data_X, data_y, data_population=None):
+    reversed = False
+
+    # If data_population is not None, it means that it is a real case. In this situation, we pick
+    # the biggest population available to maximize chances to have an interesting problem
+    if data_population is not None:
+        _, (n_0, n_1) = np.unique(data_population, return_counts=True)
+        largest_population = np.argmax([n_0, n_1])
+        mask = (data_population == largest_population)
+        data_df = data_df[mask].reset_index(drop=True)
+        data_X = data_X[mask].reset_index(drop=True)
+        data_y = data_y[mask]
+        reversed = (largest_population == 1)
+
+    return data_df, data_X, data_y, reversed
+
+
+
+@dict_wrapper('input_df', 'input_X', 'input_y', '{splitid}_population', 'input_reversed')
+def load_real_problem(data_df, data_X, data_y, data_population=None):
+    assert(data_population is not None)
+
+    # We put the smallest population as 0 because this is how matching algo works afterward.
+    _, (n_0, n_1) = np.unique(data_population, return_counts=True)
+    reversed = False
+    if n_1 < n_0:
+        data_population = 1 - data_population
+        reversed = True
+
+    return data_df, data_X, data_y, data_population.values, reversed
 
 
 @dict_wrapper('{splitid}_psmpy_groups', '{splitid}_psmpy_map') 
@@ -54,10 +105,10 @@ def psmpy_match_cv(data_X, splitid_population, splitid_propensity_score, input_r
     pass
 
 @dict_wrapper('{splitid}_psmpy_groups', '{splitid}_psmpy_map') 
-def psmpy_match(data_X, splitid_population, splitid_propensity_score, input_random_state):
-    df = pd.DataFrame(data_X)
+def psmpy_match(input_X, splitid_population, splitid_propensity_score, input_random_state):
+    df = input_X.copy()
     df['groups'] = splitid_population
-    df['index'] = np.arange(data_X.shape[0])
+    df['index'] = np.arange(input_X.shape[0])
 
     psm = PsmPy(df, treatment='groups', indx='index', exclude = [], seed=input_random_state)
     psm.logistic_ps(balance=True)
@@ -81,7 +132,7 @@ def psmpy_match(data_X, splitid_population, splitid_propensity_score, input_rand
 
 
 @dict_wrapper('{splitid}_bipartify_groups', '{splitid}_bipartify_map') 
-def bipartify(data_df, splitid_population, splitid_propensity_score,
+def bipartify(input_df, splitid_population, splitid_propensity_score,
               data_categorical, data_continuous_std,
               n_match=1, feature_weight=0.1, verbose=0):
     """Perform population matching.
@@ -96,17 +147,17 @@ def bipartify(data_df, splitid_population, splitid_propensity_score,
     # - Else, we continue to break it down using ordinal variables
     # - If we run out of categorical and we are still not good, then do nn matching.
     
-    continuous_features = data_df[data_continuous_std]
+    continuous_features = input_df[data_continuous_std]
 
     match_pop_0 = []
     match_pop_1 = []
     match_dists = []
 
     # For convenience it is easier to have propensity in the data
-    data_df['_propensity'] = splitid_propensity_score
-    data_df['_population'] = splitid_population
+    input_df['_propensity'] = splitid_propensity_score
+    input_df['_population'] = splitid_population
 
-    for _, gdf in data_df.groupby(data_categorical):
+    for _, gdf in input_df.groupby(data_categorical):
 
         pop = gdf['_population']
         gdf_0, gdf_1 = gdf[pop == 0], gdf[pop == 1]
@@ -169,7 +220,7 @@ def bipartify(data_df, splitid_population, splitid_propensity_score,
                 pass
 
     # We create a group indicator and return it.
-    groups = pd.DataFrame(-np.ones(data_df.shape[0]), index=data_df.index)
+    groups = pd.DataFrame(-np.ones(input_df.shape[0]), index=input_df.index)
     match_pop_0 = np.hstack(match_pop_0)
     match_pop_1 = np.hstack(match_pop_1)
     match_dists = np.hstack(match_dists)
@@ -238,20 +289,20 @@ def matchit_match_cv():
     methods = ['nearest', 'optimal', 'full', 'genetic', 'cem',
                'exact', 'subclass']  # 'cardinality',
 
-@dict_wrapper('{splitid}_matchit_{distance}_{method}_groups', '{splitid}_matchit_{distance}_{method}_map') 
-def matchit_match(data_df, data_target, data_continuous, data_categorical,
+@dict_wrapper('matchit{splitid}_{distance}_{method}_groups', 'matchit{splitid}_{distance}_{method}_map') 
+def matchit_match(input_df, data_continuous, data_categorical,
                   data_ordinal,
                   splitid_population, input_random_state,
                   distance=None, method=None):
 
     import_matchit()
     matchit = robjects.r['matchit']
-    data_df['pop'] = splitid_population
+    input_df['pop'] = splitid_population
 
     # convert the data frame from Pandas to R
     with robjects.conversion.localconverter(
         robjects.default_converter + pandas2ri.converter):
-        rdf = robjects.conversion.py2rpy(data_df)
+        rdf = robjects.conversion.py2rpy(input_df)
 
     feats = data_continuous + [f'factor({c})' for c in data_categorical + data_ordinal]
     formula = 'pop ~ ' + ' + '.join(feats)
@@ -261,21 +312,29 @@ def matchit_match(data_df, data_target, data_continuous, data_categorical,
                   distance=distance)
 
     rmatch = np.array(res[0])
-    idx = np.arange(rmatch.shape[0])
+    # For some reason, the cem method returns a full array with negative values at population
+    if method == 'cem':
+        rmatch = rmatch[splitid_population == 1]
+    idx = np.where(splitid_population == 1)[0]
+    assert(rmatch.shape[0] == idx.shape[0])
     if rmatch.dtype == object:
         match_pop_1 = idx[rmatch != NA_Character]
         match_pop_0 = rmatch[rmatch != NA_Character].astype(int)
     else:
         match_pop_1 = idx[rmatch != NA_Integer]
         match_pop_0 = rmatch[rmatch != NA_Integer]
+
+    assert(match_pop_0.shape[0] == match_pop_1.shape[0])
+    assert(np.unique(match_pop_0).shape[0] == np.unique(match_pop_1).shape[0])
+
     # We create a group indicator and return it.
-    groups = pd.DataFrame(-np.ones(data_df.shape[0]), index=data_df.index)
-    groups.iloc[match_pop_0] = 0
-    groups.iloc[match_pop_1] = 1
+    groups = pd.DataFrame(-np.ones(input_df.shape[0]), index=input_df.index)
+    groups.loc[match_pop_0] = 0
+    groups.loc[match_pop_1] = 1
 
     matchmap = pd.DataFrame.from_dict({'index_pop_0': match_pop_0, 'index_pop_1': match_pop_1,
                                        'distance': np.zeros(match_pop_0.shape[0])})
 
 
-    data_df.drop('pop', axis=1, inplace=True)
+    input_df.drop('pop', axis=1, inplace=True)
     return groups.values[:, 0], matchmap
