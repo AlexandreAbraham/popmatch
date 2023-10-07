@@ -81,7 +81,6 @@ def load_biggest_population(data_df, data_X, data_y, data_population=None):
         data_X = data_X[mask].reset_index(drop=True)
         data_y = data_y[mask]
         reversed = (largest_population == 1)
-
     return data_df, data_X, data_y, reversed
 
 

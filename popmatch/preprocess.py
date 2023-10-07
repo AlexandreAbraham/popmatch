@@ -35,5 +35,6 @@ def preprocess(data_df, data_target, data_continuous_std, data_categorical, data
     data_X = data_transformer.fit_transform(data_df)
     data_X = pd.DataFrame(data_X)
     data_y = data_df[data_target].values
+    assert(data_df.shape[0] == data_X.shape[0])
     
     return data_X, data_y, data_formula, data_transformer

@@ -8,7 +8,7 @@ from scipy.optimize import linear_sum_assignment
 from sklearn.neighbors import NearestNeighbors
 from .experiment import dict_wrapper, dict_router
 from sklearn.preprocessing import StandardScaler
-
+from sklearn.impute import SimpleImputer
 
 
 @dict_wrapper('data_df', 'data_target', 'data_continuous', 'data_ordinal', 'data_categorical')
@@ -67,6 +67,48 @@ def load_groupon(input_dataset):
 
 
 @dict_wrapper('data_df', 'data_target', 'data_continuous', 'data_ordinal', 'data_categorical', 'data_population')
+def load_horse(input_dataset):
+    assert(input_dataset == 'horse')
+
+    df = pd.read_csv(os.path.dirname(__file__) + '/../datasets/horse.csv')
+
+    target = 'outcome'
+    df.outcome.replace({'lived': 0, 'died': 1, 'euthanized': 1}, inplace=True)
+    df.age.replace({'young': 0, 'adult': 1}, inplace=True)
+
+    df.temp_of_extremities.fillna('cool', inplace=True)  # most frequent imputation
+    df.pain.fillna('mild_pain', inplace=True)
+    df.mucous_membrane.fillna('normal_pink', inplace=True)
+    df.abdomen.fillna('distend_large', inplace=True)
+
+    df.temp_of_extremities.replace({'cold': 0, 'cool': 1, 'normal': 2, 'warm': 3}, inplace=True)
+    df.peripheral_pulse.replace({'absent': 0, 'reduced': 1, 'normal': 2, 'increased': 3}, inplace=True)
+    df.capillary_refill_time.replace({'less_3_sec': 0, '3': 1, 'more_3_sec': 2}, inplace=True)
+    df.peristalsis.replace({'absent': 0, 'hypomotile': 1, 'normal': 2, 'hypermotile': 3}, inplace=True)
+    df.abdominal_distention.replace({'none': 0, 'slight': 1, 'moderate': 2, 'severe': 3}, inplace=True)
+    df.nasogastric_tube.replace({'none': 0, 'slight': 1, 'significant': 2}, inplace=True)
+    df.nasogastric_reflux.replace({'none': 0, 'less_1_liter': 1, 'more_1_liter': 2}, inplace=True)
+    df.rectal_exam_feces.replace({'absent': 0, 'decreased': 1, 'normal': 2, 'increased': 3}, inplace=True)
+    df.abdomo_appearance.replace({'clear': 0, 'cloudy': 1, 'serosanguious': 2}, inplace=True)
+    continuous = ['rectal_temp', 'pulse', 'respiratory_rate', 'nasogastric_reflux_ph',
+                  'packed_cell_volume', 'total_protein', 'abdomo_protein']
+    ordinal = ['age', 'temp_of_extremities', 'peripheral_pulse', 'capillary_refill_time', 'peristalsis',
+               'abdominal_distention', 'nasogastric_tube', 'nasogastric_reflux', 'rectal_exam_feces',
+               'abdomo_appearance']
+    categorical = ['mucous_membrane', 'pain', 'abdomen']
+    population = df['surgery'].replace({"no": 0, "yes": 1})
+
+    mean_imputer = SimpleImputer()
+    for column in continuous:
+        df[column] = mean_imputer.fit_transform(df[[column]].values)[:, 0]
+    most_fqt_imputer = SimpleImputer(strategy='most_frequent')
+    for column in ordinal:
+        df[column] = most_fqt_imputer.fit_transform(df[[column]].values)[:, 0]
+
+    return df, target, continuous, ordinal, categorical, population
+
+
+@dict_wrapper('data_df', 'data_target', 'data_continuous', 'data_ordinal', 'data_categorical', 'data_population')
 def load_nhanes(input_dataset):
     assert(input_dataset == 'nhanes')
 
@@ -103,6 +145,8 @@ def load_data(input_dataset):
         return load_groupon
     elif input_dataset == 'nhanes':
         return load_nhanes
+    elif input_dataset == 'horse':
+        return load_horse
 
 @dict_wrapper('data_df', 'data_continuous_std')
 def standardize_continuous_features(data_df, data_continuous):
