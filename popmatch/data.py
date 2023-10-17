@@ -9,6 +9,44 @@ from sklearn.neighbors import NearestNeighbors
 from .experiment import dict_wrapper, dict_router
 from sklearn.preprocessing import StandardScaler
 from sklearn.impute import SimpleImputer
+from .regression import synthetic_data
+from .utils import batched
+
+
+def simulate_with_common_features(r, n=1000, p=5, sigma=1.0, adj=0.0):
+    """Synthetic data with different common features between propensity and outcome
+    Args:
+        r (int): number of features in common between propensity and outcome
+        n (int, optional): number of observations
+        p (int optional): number of covariates (>=3)
+        sigma (float): standard deviation of the error term
+        adj (float): adjustment term for the distribution of propensity, e. Higher values shift the distribution to 0.
+    Returns:
+        (tuple): Synthetically generated samples with the following outputs:
+            - y ((n,)-array): outcome variable.
+            - X ((n,p)-ndarray): independent variables.
+            - w ((n,)-array): treatment flag with value 0 or 1.
+            - tau ((n,)-array): individual treatment effect.
+            - b ((n,)-array): expected outcome.
+            - e ((n,)-array): propensity of receiving treatment.
+    """
+
+    X = np.random.normal(size=(n, p))
+    lf = (p - r) // 2 + r
+    rf = (p - lf) + r
+    tau = []
+    for coords in batched(range(p - rf, p), n=3):
+        tau.append(np.clip(np.max(X[:, slice(coords[0], coords[-1] + 1)], axis=1), 0, None))
+    tau = sum(tau)
+    if r > 0:
+        tau = tau / (((r - 1) // 3) + 1)
+    b = np.zeros(n)
+    e = 1 / (1 + sum([np.exp(X[:, i]) for i in range(lf)]) / (lf + 1) * 2)
+    w = np.random.binomial(1, e, size=n)
+    y = b + (w - 0.5) * tau + sigma * np.random.normal(size=n)
+
+    return y, X, w, tau, b, e
+
 
 
 @dict_wrapper('data_df', 'data_target', 'data_continuous', 'data_ordinal', 'data_categorical')
@@ -76,11 +114,6 @@ def load_horse(input_dataset):
     df.outcome.replace({'lived': 0, 'died': 1, 'euthanized': 1}, inplace=True)
     df.age.replace({'young': 0, 'adult': 1}, inplace=True)
 
-    df.temp_of_extremities.fillna('cool', inplace=True)  # most frequent imputation
-    df.pain.fillna('mild_pain', inplace=True)
-    df.mucous_membrane.fillna('normal_pink', inplace=True)
-    df.abdomen.fillna('distend_large', inplace=True)
-
     df.temp_of_extremities.replace({'cold': 0, 'cool': 1, 'normal': 2, 'warm': 3}, inplace=True)
     df.peripheral_pulse.replace({'absent': 0, 'reduced': 1, 'normal': 2, 'increased': 3}, inplace=True)
     df.capillary_refill_time.replace({'less_3_sec': 0, '3': 1, 'more_3_sec': 2}, inplace=True)
@@ -102,7 +135,7 @@ def load_horse(input_dataset):
     for column in continuous:
         df[column] = mean_imputer.fit_transform(df[[column]].values)[:, 0]
     most_fqt_imputer = SimpleImputer(strategy='most_frequent')
-    for column in ordinal:
+    for column in ordinal + categorical:
         df[column] = most_fqt_imputer.fit_transform(df[[column]].values)[:, 0]
 
     return df, target, continuous, ordinal, categorical, population
@@ -132,6 +165,32 @@ def load_nhanes(input_dataset):
 
     return df, target, continuous, ordinal, categorical, df[population]
 
+
+@dict_wrapper('data_df', 'data_target', 'data_continuous', 'data_ordinal', 'data_categorical', 'data_population',
+              'data_true_propensity', 'data_true_outcome', 'data_true_ite')
+def load_synthetic(input_dataset):
+    args = input_dataset.split('_')
+    assert(args[0] == 'synthetic')
+
+    mode = int(args[1])
+    if mode <= 5:
+        y, X, treatment, tau, b, e = synthetic_data(mode=int(mode))
+    elif mode == 6:
+        common_features = int(args[2])
+        y, X, treatment, tau, b, e = simulate_with_common_features(common_features)
+    elif mode == 7:
+        common_features = int(args[2])
+        y, X, treatment, tau, b, e = simulate_with_common_features(common_features, n=3000, p=10)
+
+    target = 'target'
+    continuous = ['feat_' + str(i) for i in range(X.shape[1])]
+    ordinal = []
+    categorical = []
+    df = pd.DataFrame(X, columns=continuous)
+    df['target'] = y
+
+    return df, target, continuous, ordinal, categorical, treatment, e, b, tau
+
 @dict_router
 def load_data(input_dataset):
 
@@ -147,6 +206,8 @@ def load_data(input_dataset):
         return load_nhanes
     elif input_dataset == 'horse':
         return load_horse
+    elif input_dataset.startswith('synthetic'):
+        return load_synthetic
 
 @dict_wrapper('data_df', 'data_continuous_std')
 def standardize_continuous_features(data_df, data_continuous):

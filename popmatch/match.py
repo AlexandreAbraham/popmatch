@@ -75,6 +75,7 @@ def load_biggest_population(data_df, data_X, data_y, data_population=None):
     # the biggest population available to maximize chances to have an interesting problem
     if data_population is not None:
         _, (n_0, n_1) = np.unique(data_population, return_counts=True)
+        print(n_0, n_1)
         largest_population = np.argmax([n_0, n_1])
         mask = (data_population == largest_population)
         data_df = data_df[mask].reset_index(drop=True)
@@ -96,7 +97,10 @@ def load_real_problem(data_df, data_X, data_y, data_population=None):
         data_population = 1 - data_population
         reversed = True
 
-    return data_df, data_X, data_y, data_population.values, reversed
+    if hasattr(data_population, 'values'):
+        data_population = data_population.values
+
+    return data_df, data_X, data_y, data_population, reversed
 
 
 @dict_wrapper('{splitid}_psmpy_groups', '{splitid}_psmpy_map') 
@@ -156,7 +160,12 @@ def bipartify(input_df, splitid_population, splitid_propensity_score,
     input_df['_propensity'] = splitid_propensity_score
     input_df['_population'] = splitid_population
 
-    for _, gdf in input_df.groupby(data_categorical):
+    if len(data_categorical) > 0:
+        iter_categorical = input_df.groupby(data_categorical)
+    else:
+        iter_categorical = [[None, input_df]]
+
+    for _, gdf in iter_categorical:
 
         pop = gdf['_population']
         gdf_0, gdf_1 = gdf[pop == 0], gdf[pop == 1]
@@ -316,12 +325,12 @@ def matchit_match(input_df, data_continuous, data_categorical,
         rmatch = rmatch[splitid_population == 1]
     idx = np.where(splitid_population == 1)[0]
     assert(rmatch.shape[0] == idx.shape[0])
-    if rmatch.dtype == object:
-        match_pop_1 = idx[rmatch != NA_Character]
-        match_pop_0 = rmatch[rmatch != NA_Character].astype(int)
-    else:
+    if np.issubdtype(rmatch.dtype, np.integer):
         match_pop_1 = idx[rmatch != NA_Integer]
         match_pop_0 = rmatch[rmatch != NA_Integer]
+    else:
+        match_pop_1 = idx[rmatch != NA_Character]
+        match_pop_0 = rmatch[rmatch != NA_Character].astype(int)
 
     assert(match_pop_0.shape[0] == match_pop_1.shape[0])
     assert(np.unique(match_pop_0).shape[0] == np.unique(match_pop_1).shape[0])

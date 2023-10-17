@@ -65,7 +65,7 @@ def compute_smd(input_df, data_continuous, data_categorical, data_ordinal, split
     for c in data_categorical + data_ordinal:
         ct = pd.crosstab(splitid_matching_groups[splitid_matching_groups >= 0], input_df[splitid_matching_groups >= 0][c])
         x2 = chi2_contingency(ct, correction=False)[0]
-        smd.append((c, np.sqrt(x2 / (input_df.shape[0] * (ct.shape[1] - 1))), 0.))
+        smd.append((c, np.sqrt(x2 / (input_df.shape[0] * (np.min(ct.shape[0], ct.shape[1]) - 1))), 0.))
 
     smds = pd.DataFrame(smd, columns=['feature', 'smd', 'variance_ratio'])
     return smds
@@ -81,6 +81,16 @@ def compute_target_mean_difference(input_y, splitid_matching_groups, splitid_mat
     ind_res = ttest_ind(input_y[splitid_matching_map['index_pop_0']], input_y[splitid_matching_map['index_pop_1']])
     rel_res = ttest_rel(input_y[splitid_matching_map['index_pop_0']], input_y[splitid_matching_map['index_pop_1']])
     return n0, n1, diff, ind_res.pvalue, rel_res.pvalue
+
+@dict_wrapper('{splitid}_{matching}_ate_diff', '{splitid}_{matching}_outcome_diff', '{splitid}_{matching}_ite_diff')
+def compute_synth_metrics(data_true_outcome, data_true_ite, splitid_matching_groups):
+    mask_1 = (splitid_matching_groups == 1)
+    mask_0 = (splitid_matching_groups == 0)
+    ite_diff = data_true_ite[mask_1].mean() - data_true_ite[mask_0].mean()
+    outcome_diff = data_true_outcome[mask_1].mean() - data_true_outcome[mask_0].mean()
+    ate = data_true_ite + data_true_outcome
+    ate_diff = ate[mask_1].mean() - ate[mask_0].mean()
+    return ate_diff, outcome_diff, ite_diff
 
 
 @dict_wrapper('{splitid}_{matching}_n0, {splitid}_{matching}_n1, {splitid}_{matching}_target_diff')
