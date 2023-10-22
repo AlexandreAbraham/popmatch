@@ -65,7 +65,7 @@ def compute_smd(input_df, data_continuous, data_categorical, data_ordinal, split
     for c in data_categorical + data_ordinal:
         ct = pd.crosstab(splitid_matching_groups[splitid_matching_groups >= 0], input_df[splitid_matching_groups >= 0][c])
         x2 = chi2_contingency(ct, correction=False)[0]
-        smd.append((c, np.sqrt(x2 / (input_df.shape[0] * (np.min(ct.shape[0], ct.shape[1]) - 1))), 0.))
+        smd.append((c, np.sqrt(x2 / (input_df.shape[0] * (min(ct.shape[0], ct.shape[1]) - 1))), 0.))
 
     smds = pd.DataFrame(smd, columns=['feature', 'smd', 'variance_ratio'])
     return smds

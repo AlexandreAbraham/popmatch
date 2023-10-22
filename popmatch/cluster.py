@@ -5,7 +5,7 @@ from tqdm import tqdm
 
 class GeneralPurposeClustering:
     
-    def __init__(self, n_clusters, loss, n_iter=1000, verbose=0, random_state=None):
+    def __init__(self, n_clusters, loss, n_iter=1000, verbose=0, random_state=None, early_stopping=None):
         if isinstance(n_clusters, int):
             self.n_clusters = n_clusters
             self.p_clusters = None
@@ -16,6 +16,7 @@ class GeneralPurposeClustering:
         self.loss = loss
         self.verbose = verbose
         self.rng = check_random_state(random_state)
+        self.early_stopping = early_stopping
         
     def fit(self, X):
         cluster_id = self.rng.choice(self.n_clusters, replace=True, size=X.shape[0], p=self.p_clusters)
@@ -36,9 +37,12 @@ class GeneralPurposeClustering:
             if new_loss > current_loss:
                 cluster_id[i], cluster_id[j] = cluster_id[j], cluster_id[i]
             else:
+                prev_loss = current_loss
                 current_loss = new_loss
                 if self.verbose >= 1:
                     losses.append((i, current_loss))
+                if self.early_stopping is not None and self.early_stopping(prev_loss, current_loss):
+                    break
 
         if self.verbose >= 1:
             self.loss_ = losses

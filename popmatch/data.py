@@ -9,7 +9,7 @@ from sklearn.neighbors import NearestNeighbors
 from .experiment import dict_wrapper, dict_router
 from sklearn.preprocessing import StandardScaler
 from sklearn.impute import SimpleImputer
-from .regression import synthetic_data
+# from .regression import synthetic_data
 from .utils import batched
 
 
