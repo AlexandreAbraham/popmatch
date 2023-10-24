@@ -13,7 +13,7 @@ from sklearn.impute import SimpleImputer
 from .utils import batched
 
 
-def simulate_with_common_features(r, n=1000, p=5, sigma=1.0, adj=0.0):
+def simulate_with_common_features(r, n=1000, p=5, sigma=0.1, adj=0.0):
     """Synthetic data with different common features between propensity and outcome
     Args:
         r (int): number of features in common between propensity and outcome
@@ -36,7 +36,12 @@ def simulate_with_common_features(r, n=1000, p=5, sigma=1.0, adj=0.0):
     rf = (p - lf) + r
     tau = []
     for coords in batched(range(p - rf, p), n=3):
-        tau.append(np.clip(np.max(X[:, slice(coords[0], coords[-1] + 1)], axis=1), 0, None))
+        cols = X[:, slice(coords[0], coords[-1] + 1)].copy()
+        # If there are at least 2, we sum the two first ones
+        if cols.shape[1] >= 2:
+            cols[1] += cols[0]
+            cols = cols[:, 1:]
+        tau.append(np.clip(np.max(cols, axis=1), 0, None))
     tau = sum(tau)
     if r > 0:
         tau = tau / (((r - 1) // 3) + 1)

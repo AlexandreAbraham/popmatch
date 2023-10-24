@@ -125,3 +125,13 @@ def propensity_score(input_propensity_model=None):
         return propensity_random_forest
     elif input_propensity_model == 'psmpy':
         return propensity_psmpy
+    
+def compute_propensity_overlap(splitid_population, splitid_propensity_score):
+    dist_0 = splitid_propensity_score[splitid_population == 0]
+    dist_1 = splitid_propensity_score[splitid_population == 1]
+    bins = np.arange(-0.05, 1.06, 0.10)
+    dist_0 = np.histogram(dist_0, bins=bins)[0] / dist_0.shape[0]
+    dist_1 = np.histogram(dist_1, bins=bins)[0] / dist_1.shape[0]
+    overlap = np.max([dist_0, dist_1], axis=0)
+    return overlap[1:-1].sum()
+    

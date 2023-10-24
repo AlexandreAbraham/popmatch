@@ -41,12 +41,16 @@ def split_populations_with_error(input_df, data_target,
 
         smds = compute_smd(df, data_continuous_std, data_categorical, data_ordinal, cluster_ids)
         smd = smds.smd.mean()
-        dsmd = (input_simulated_split_smd - smd)
+        dsmd = (input_simulated_split_smd - smd) ** 2
         
-        return dy - input_simulated_split_smd_weight * dsmd
+        return dy + input_simulated_split_smd_weight * dsmd
+    
+    def early_stopping(prev_loss, curr_loss):
+        return (curr_loss < 10e-4)
 
     gps = GeneralPurposeClustering(input_simulated_split_population_ratio, loss,
-                                   verbose=1, random_state=input_random_state)
+                                   verbose=1, random_state=input_random_state,
+                                   early_stopping=early_stopping)
 
     gps.fit(input_df)
     return gps.cluster_id_
