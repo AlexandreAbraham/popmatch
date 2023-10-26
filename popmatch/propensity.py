@@ -8,6 +8,20 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import make_scorer, accuracy_score
+import seaborn as sns
+from matplotlib import pyplot as plt
+
+
+class ValidAccuracy():
+    def __init__(self, clip_score):
+        self.clip_score = clip_score
+
+    def __call__(self, y, y_pred, **kwargs):
+        accuracy = accuracy_score(y, y_pred > .5)
+        mean_valid_entries = ((y_pred >= self.clip_score) & (y_pred <= (1 - self.clip_score))).mean()
+        overlap = compute_propensity_overlap(
+            np.hstack([np.zeros(y.shape[0]), np.ones(y_pred.shape[0])]), np.hstack([y, y_pred]))
+        return accuracy + mean_valid_entries + int(overlap > .5)
 
 
 @dict_wrapper('{output}_population', '{output}_propensity_score', '{output}_ordinal_ordered')
@@ -15,6 +29,7 @@ def propensity_logistic_regression(input_X, data_transformer, data_ordinal,
                                    input_propensity_transform, splitid_population, input_random_state,
                                    input_calibrated=True, input_clip_score=0.001):
     
+    scoring = make_scorer(ValidAccuracy(input_clip_score), needs_proba=True)
     n_0 = (splitid_population == 0).sum()
     n_1 = (splitid_population == 1).sum()
     n = n_0 + n_1
@@ -23,7 +38,7 @@ def propensity_logistic_regression(input_X, data_transformer, data_ordinal,
         sample_weight = splitid_population.copy().astype(float)
         sample_weight[splitid_population == 0] = n_1 / n
         sample_weight[splitid_population == 1] = n_0 / n
-    clf = LogisticRegressionCV(random_state=input_random_state, max_iter=10000)
+    clf = LogisticRegressionCV(random_state=input_random_state, max_iter=10000, scoring=scoring)
     clf.fit(input_X, splitid_population, sample_weight=sample_weight)
     propensity_score = clf.predict_proba(input_X)[:, 1]
     
@@ -71,18 +86,15 @@ def propensity_random_forest(input_X, data_transformer, data_ordinal,
                              input_propensity_transform, splitid_population,
                              input_calibrated=True, input_clip_score=0.001):
     
-    def valid_accuracy(y, y_pred, **kwargs):
-        accuracy = accuracy_score(y, y_pred > .5)
-        mean_valid_entries = ((y_pred >= input_clip_score) & (y_pred <= (1 - input_clip_score))).mean()
-        return accuracy + mean_valid_entries
-    scoring = make_scorer(valid_accuracy, needs_proba=True)
+
+    scoring = make_scorer(ValidAccuracy(input_clip_score), needs_proba=True)
     clf = RandomForestClassifier(min_weight_fraction_leaf=0.01)
     if input_calibrated:
         clf.fit(input_X, splitid_population)
         clf = CalibratedClassifierCV(base_estimator=clf, method='sigmoid', n_jobs=-1)
         param_grid = {
-            'base_estimator__n_estimators': [5, 10, 50],
-            'base_estimator__max_depth': [2, 5, 8]
+            'base_estimator__n_estimators': [5, 10, 50, 100],
+            'base_estimator__max_depth': [2, 5, 8, 15]
         }
         clf = GridSearchCV(clf, param_grid, scoring=scoring, error_score='raise', n_jobs=-1)
         clf.fit(input_X, splitid_population)
@@ -126,12 +138,23 @@ def propensity_score(input_propensity_model=None):
     elif input_propensity_model == 'psmpy':
         return propensity_psmpy
     
-def compute_propensity_overlap(splitid_population, splitid_propensity_score):
+def compute_propensity_overlap(splitid_population, splitid_propensity_score, save_plot=None):
     dist_0 = splitid_propensity_score[splitid_population == 0]
     dist_1 = splitid_propensity_score[splitid_population == 1]
+    if save_plot is not None:
+        plt.figure(figsize=(8, 6))
+        sns.kdeplot(dist_0, label="Control", shade=True)  # Plot the first distribution
+        sns.kdeplot(dist_1, label="Treated", shade=True)  # Plot the second distribution
+        plt.xlabel("Propensity")
+        plt.ylabel("Density")
+        plt.legend(loc='upper left')
+        plt.tight_layout()
+        plt.savefig(save_plot)
     bins = np.arange(-0.05, 1.06, 0.10)
     dist_0 = np.histogram(dist_0, bins=bins)[0] / dist_0.shape[0]
     dist_1 = np.histogram(dist_1, bins=bins)[0] / dist_1.shape[0]
-    overlap = np.max([dist_0, dist_1], axis=0)
+    overlap = np.min([dist_0, dist_1], axis=0)
+
+    assert(overlap[1:-1].sum() <= 1.)
     return overlap[1:-1].sum()
     
