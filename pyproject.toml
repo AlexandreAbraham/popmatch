@@ -2,7 +2,7 @@
 name = "popmatch"
 version = "0.0.1"
 description = "A python package to perform population matching in the most automated way."
-authors = ["Alexandre Abraham <abraham.alexandre@gmail.com>"]
+authors = ["Anonymous"]
 license = "MIT"
 readme = "README.md"
 

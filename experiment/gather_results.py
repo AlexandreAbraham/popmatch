@@ -1,9 +1,10 @@
 import numpy as np
 import pandas as pd
 import os
-from autorank import autorank
+from autorank import autorank, plot_stats, create_report
 import sys
 from scipy.stats import kendalltau
+from matplotlib import pyplot as plt
 
 sys.path.append('../')
 from popmatch.utils import get_best_group_from_autorank_results
@@ -106,7 +107,50 @@ class Bounds:
 results = results[~results['method'].str.contains('logit')]
 artificials = artificials[~artificials['method'].str.contains('logit')]
 
+matching_map = {
+    'bart_nearest': 'Bart nearest',
+    'bart_optimal': 'Bart optimal',
+    'bipartify_identity_logistic-regression': 'Bipartify LR',
+    'bipartify_identity_psmpy': 'Bipartify PsmPy',
+    'bipartify_identity_random-forest': 'Bipartify RF',
+    'cbps_nearest': 'CBPS nearest',
+    'cbps_optimal': 'CBPS optimal',
+    'elasticnet_nearest': 'ElasticNet nearest',
+    'elasticnet_optimal': 'ElasticNet optimal',
+    'gam_nearest': 'GAM nearest',
+    'gam_optimal': 'GAM optimal',
+    'glm_nearest': 'GLM nearest',
+    'glm_optimal': 'GLM optimal',
+    'psmpy_identity_logistic-regression': 'PsmPy LR',
+    'psmpy_identity_psmpy': 'PsmPy PsmPy',
+    'psmpy_identity_random-forest': 'PsmPy RF',
+    'rpart_nearest': 'Rpart nearest',
+    'rpart_optimal': 'Rpart optimal',
+}
+results.matching.replace(matching_map, inplace=True)
+artificials.matching.replace(matching_map, inplace=True)
+
+results['absate'] = results.ate.abs()
+r = results[~results.matching.str.contains('nearest')]
+r = r.pivot(index='matching', columns='dataset', values='absate')
+r = r[[f'synthetic_7_{i}' for i in range(11)]]
+print(r)
+ar = autorank(-r.T)
+plt.figure(figsize=(16, 4))
+plot_stats(ar, ax=plt.gca())
+print(create_report(ar))
+plt.tight_layout()
+plt.savefig('rank.pdf')
+plt.savefig('rank.png')
+
+
 results['absdiff'] = results['diff'].abs()
+
+r = results[results.dataset.isin(['groupon', 'nhanes', 'horse'])]
+r = r[~r.matching.str.contains('nearest')]
+r = r.pivot(index='matching', columns='dataset', values=['smd', 'absdiff'])
+print(r.to_latex(float_format="%.3f"))
+
 results['group_dataset'] = results['dataset']  # Ugly hack because I need to know the dataset in the grouping...
 agg = Bounds(artificials, 'target', 'ate', 'smd', 'absdiff')
 results = results.groupby('dataset').apply(agg).reset_index(drop=True)
