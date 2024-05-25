@@ -92,15 +92,15 @@ def extract_corr(df, agg):
     df = df[['corr', 'pvalue_mean']]
     return df
 
-agg = Spearman('target', 'smd')
+agg = Correlation('target', 'smd')
 results_smd = extract_corr(results, agg)
 results_smd.columns = pd.MultiIndex.from_product([['Target'], results_smd.columns])
 
-agg = Spearman('abstarget', 'smd')
+agg = Correlation('abstarget', 'smd')
 results_smd_abs = extract_corr(results, agg)
 results_smd_abs.columns = pd.MultiIndex.from_product([['Absolute target'], results_smd_abs.columns])
 
-agg = Spearman('abstarget', 'random')
+agg = Correlation('abstarget', 'random')
 results_rnd = extract_corr(results, agg)
 results_rnd.columns = pd.MultiIndex.from_product([['Random'], results_rnd.columns])
 
@@ -108,3 +108,8 @@ results = pd.concat([results_smd, results_smd_abs, results_rnd], axis=1)
 
 print(results)
 # print(results.to_latex(float_format="%.2f"))
+
+results = pd.concat([results_smd_abs, results_rnd], axis=1)
+
+# print(results)
+print(results.to_latex(float_format="%.2f"))

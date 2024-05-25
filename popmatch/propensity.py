@@ -17,7 +17,7 @@ class ValidAccuracy():
         self.clip_score = clip_score
 
     def __call__(self, y, y_pred, **kwargs):
-        accuracy = accuracy_score(y, y_pred > .5)
+        accuracy = accuracy_score(y, y_pred)
         mean_valid_entries = ((y_pred >= self.clip_score) & (y_pred <= (1 - self.clip_score))).mean()
         overlap = compute_propensity_overlap(
             np.hstack([np.zeros(y.shape[0]), np.ones(y_pred.shape[0])]), np.hstack([y, y_pred]))

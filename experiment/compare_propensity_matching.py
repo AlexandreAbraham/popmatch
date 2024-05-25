@@ -233,6 +233,64 @@ for i, txt in enumerate(c['target']):
 plt.savefig('diff_vs_smd_vs_target.png')
 plt.close()
 
+grouped = targets.groupby('matching').agg({
+    'smd': ['mean', 'min', 'max', 'std'],
+    'target': ['mean', 'min', 'max', 'std']
+}).reset_index()
+
+# Flatten the MultiIndex columns
+grouped.columns = ['matching', 'mean_smd', 'min_smd', 'max_smd', 'std_smd',
+                   'mean_target', 'min_target', 'max_target', 'std_target']
+
+# Calculate error bars
+# grouped['error_smd_min'] = grouped['mean_smd'] - grouped['min_smd']
+# grouped['error_smd_max'] = grouped['max_smd'] - grouped['mean_smd']
+# grouped['error_target_min'] = grouped['mean_target'] - grouped['min_target']
+# grouped['error_target_max'] = grouped['max_target'] - grouped['mean_target']
+grouped['error_smd_min'] = grouped['std_smd']
+grouped['error_smd_max'] = grouped['std_smd']
+grouped['error_target_min'] = grouped['std_target']
+grouped['error_target_max'] = grouped['std_target']
+
+# Create scatter plot with error bars
+plt.figure(figsize=(10, 6))
+plt.errorbar(grouped['mean_smd'], grouped['mean_target'],
+             xerr=None,
+             # xerr=[grouped['error_smd_min'], grouped['error_smd_max']],
+             yerr=[grouped['error_target_min'], grouped['error_target_max']],
+             fmt='o', capsize=5, label='Experiment data')
+
+# for i, exp in enumerate(grouped['matching']):
+#     plt.text(grouped['mean_smd'][i], grouped['mean_target'][i], exp)
+
+plt.xlabel('SMD')
+plt.ylabel('Diff')
+plt.title('Scatter plot with min/max error bars')
+plt.legend()
+plt.grid(True)
+
+plt.savefig('diff_vs_smd_vs_target_errobars.png')
+plt.close()
+
+import numpy as np
+
+from sklearn import metrics
+from sklearn.cluster import DBSCAN
+from sklearn.preprocessing import StandardScaler
+
+X = c[['diff', 'smd']].values
+X = StandardScaler().fit_transform(X)
+db = DBSCAN(eps=0.3, min_samples=2).fit(X)
+labels = db.labels_
+print(labels)
+plt.scatter(c['diff'], c['smd'], c=[f'C{l + 1}' for l in labels])
+plt.xlabel('diff')
+plt.ylabel('smd')
+plt.savefig('diff_vs_smd_vs_target_colors.png')
+plt.close()
+
+
+
 if dirname.startswith('synth'):
     plt.scatter(c['diff'], c['smd'])
     plt.xlabel('diff')

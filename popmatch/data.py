@@ -13,12 +13,12 @@ from sklearn.impute import SimpleImputer
 from .utils import batched
 
 
-def simulate_with_common_features(r, n=1000, p=5, sigma=0.1, adj=0.0):
-    """Synthetic data with different common features between propensity and outcome
+def simulate_with_confounders(n_features, n_confounders, n=1000, sigma=0.1, adj=0.0):
+    """Synthetic data with a different amount of confounders
     Args:
-        r (int): number of features in common between propensity and outcome
+        r (int): number of groups of 3 confounders
         n (int, optional): number of observations
-        p (int optional): number of covariates (>=3)
+        p (int optional): number of groups of 3 covariates
         sigma (float): standard deviation of the error term
         adj (float): adjustment term for the distribution of propensity, e. Higher values shift the distribution to 0.
     Returns:
@@ -31,16 +31,23 @@ def simulate_with_common_features(r, n=1000, p=5, sigma=0.1, adj=0.0):
             - e ((n,)-array): propensity of receiving treatment.
     """
 
-    X = np.random.normal(size=(n, p))
-    lf = (p - r) // 2 + r
-    rf = (p - lf) + r
+    assert((n_features - n_confounders) % 2 == 0)
+    assert(n_features % 3 == 0)
+    # Features are splitted as follows:
+    # A B C D E F G H I J
+    # -----------         = propensity features
+    #         ---         = confounders
+    #         ----------- = outcome features
+
+    p = (n_features) * 3
+    
+    X = np.random.normal(size=(n, p * 3))
+    
     tau = []
-    for coords in batched(range(p - rf, p), n=3):
-        cols = X[:, slice(coords[0], coords[-1] + 1)].copy()
-        # If there are at least 2, we sum the two first ones
-        if cols.shape[1] >= 2:
-            cols[1] += cols[0]
-            cols = cols[:, 1:]
+    for triplet in batched(range(p), n=3):
+        cols = X[:, slice(triplet[0], triplet[-1] + 1)].copy()
+        cols[1] += cols[0]
+        cols = cols[:, 1:]
         tau.append(np.clip(np.max(cols, axis=1), 0, None))
     tau = sum(tau)
     if r > 0:
