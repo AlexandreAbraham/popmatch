@@ -24,6 +24,38 @@ import tqdm
 dirname = os.path.split(os.path.dirname(__file__))[1]
 
 
+names = {
+    'matchitglm_nearest': '',
+    'matchitglm_optimal': 'GLM',
+    'matchitgam_nearest': '',
+    'matchitgam_optimal': 'GAM',
+    'matchitelasticnet_nearest': '',
+    'matchitelasticnet_optimal': 'ElasticNet',
+    'matchitrpart_nearest': '',
+    'matchitrpart_optimal': 'RPart',
+    'matchitcbps_nearest': '',
+    'matchitcbps_optimal': 'CBPD',
+    'matchitbart_nearest': '',
+    'matchitbart_optimal': 'Bart',
+    'pythonidentitylogistic-regressionbipartify_identity_logistic-regression': 'Bipartify LR',
+    'pythonidentitylogistic-regressionpsmpy_identity_logistic-regression': 'PsmPy LR',
+    'pythonidentityrandom-forestbipartify_identity_random-forest': 'Bipartify RF',
+    'pythonidentityrandom-forestpsmpy_identity_random-forest': 'PsmPy RF',
+    'pythonidentitypsmpybipartify_identity_psmpy': 'Bipartify CLR',
+    'pythonidentitypsmpypsmpy_identity_psmpy': 'PsmPy CLR',
+    'pythonlogitlogistic-regressionbipartify_logit_logistic-regression': '',
+    'pythonlogitlogistic-regressionpsmpy_logit_logistic-regression': '',
+    'pythonlogitrandom-forestbipartify_logit_random-forest': '',
+    'pythonlogitrandom-forestpsmpy_logit_random-forest': '',
+    'pythonlogitpsmpybipartify_logit_psmpy': '',
+    'pythonlogitpsmpypsmpy_logit_psmpy': '',
+    'matchitbipartify_identity_logistic-regression': 'Bipartify LR',
+    'matchitbipartify_identity_psmpy': 'Bipartify CLR',
+    'matchitbipartify_identity_random-forest': 'Bipartify RF',
+    'matchitpsmpy_identity_logistic-regression': 'PsmPy LR',
+    'matchitpsmpy_identity_psmpy': 'PsmPy CLR',
+    'matchitpsmpy_identity_random-forest': 'PsmPy RF',
+}
 
 experiment = {
     'input': {
@@ -197,10 +229,16 @@ targets['method'] = targets.split_id.str.split('split').str[0] + targets['matchi
 rtargets = pd.DataFrame.from_records(real_targets)
 rtargets['method'] = rtargets.split_id.str.split('real').str[0] + rtargets['matching']
 
+target_diff = experiment['input']['simulated_split_target_difference']
+targets['ratio'] = targets['target'].abs() <= target_diff * 0.1
 a = targets.groupby('matching')[['target']].mean().rename(columns={'target': 'diff'}).reset_index()
+# a = targets.groupby('matching')[['ratio']].mean().rename(columns={'ratio': 'diff'}).reset_index()
 b = rtargets
 c = a.merge(b, on='matching', how='inner', validate='1:1')
 
+c = c[~(c.method.str.contains('nearest') | c.method.str.contains('logit'))]
+c['method'] = c['method'].replace(names)
+print(c['method'])
 
 from matplotlib import pyplot as plt
 
@@ -229,7 +267,7 @@ txts = []
 for i, txt in enumerate(c['target']):
     t = plt.gca().annotate('{:.2}'.format(txt), (c.iloc[i]['diff'], c.iloc[i]['smd']), fontsize=10)
     txts.append(t)
-    adjust_text(txts)
+adjust_text(txts)
 plt.savefig('diff_vs_smd_vs_target.png')
 plt.close()
 
