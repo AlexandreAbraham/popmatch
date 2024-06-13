@@ -7,7 +7,7 @@ from scipy.stats import kendalltau
 from matplotlib import pyplot as plt
 
 sys.path.append('../')
-from popmatch.utils import get_best_group_from_autorank_results, get_best_group_from_dbscan
+from popmatch.utils import get_best_group_from_autorank_results, get_best_group_from_dbscan, get_best_A2A, get_best_group_from_pareto
 
 
 datasets = [
@@ -88,33 +88,50 @@ class Bounds:
         # A2A
         # ar_result = autorank(artificial_df[df.matching.unique()].abs(), alpha=0.05, force_mode='nonparametric')
         # ar_best_methods = get_best_group_from_autorank_results(ar_result)
-        db_mask = get_best_group_from_dbscan(df[['diff']], self.top_col)
-        ar_best_methods = df['matching'].iloc[db_mask].values
-        filtered_df = df[df.matching.isin(ar_best_methods)]
-        _add_bounds(df, filtered_df[self.value_col].values, filtered_df[self.error_col].values, self.top_col)
-
-        # A2A-SMD
-        db_mask = get_best_group_from_dbscan(df[['diff']], self.top_col, threshold_mask=df[self.threshold_col] < self.threshold)
-        ar_best_methods = df['matching'].iloc[db_mask].values
-        filtered_df =  filtered_df[filtered_df[self.threshold_col] < self.threshold]
-        _add_bounds(df, filtered_df[self.value_col].values, filtered_df[self.error_col].values, f'{self.top_col}-{self.threshold_col}')
-
-        # SMD-A2A
-        filtered_df = df[df[self.threshold_col] < self.threshold]
-        # ar_result = autorank(artificial_df[filtered_df.matching.unique()].abs(), alpha=0.05, force_mode='nonparametric')
-        # ar_best_methods = get_best_group_from_autorank_results(ar_result)
-        db_mask = get_best_group_from_dbscan(filtered_df[['diff']], self.top_col)
-        ar_best_methods = filtered_df['matching'].iloc[db_mask].values
-        filtered_df = filtered_df[filtered_df.matching.isin(ar_best_methods)]
-        _add_bounds(df, filtered_df[self.value_col].values, filtered_df[self.error_col].values, f'{self.threshold_col}-{self.top_col}')
-
-        # SMD+A2A
-        db_mask = get_best_group_from_dbscan(df[['diff', 'smd']], self.top_col, threshold_mask=df[self.threshold_col] < self.threshold)
+        db_mask = get_best_group_from_dbscan(df, self.top_col, self.threshold_col, 2., True)
         ar_best_methods = df['matching'].iloc[db_mask].values
         filtered_df = df[df.matching.isin(ar_best_methods)]
         filtered_df = filtered_df[filtered_df[self.threshold_col] < self.threshold]
-
         _add_bounds(df, filtered_df[self.value_col].values, filtered_df[self.error_col].values, f'{self.threshold_col}+{self.top_col}')
+
+        # SMD-A2A
+        db_mask = get_best_group_from_dbscan(df, self.top_col, self.threshold_col, self.threshold, False)
+        ar_best_methods = df['matching'].iloc[db_mask].values
+        filtered_df = df[df.matching.isin(ar_best_methods)]
+        filtered_df = filtered_df[filtered_df[self.threshold_col] < self.threshold]
+        _add_bounds(df, filtered_df[self.value_col].values, filtered_df[self.error_col].values, f'{self.threshold_col}-{self.top_col}')
+
+        # SMD+A2A
+        db_mask = get_best_group_from_dbscan(df, self.top_col, self.threshold_col, self.threshold, True)
+        ar_best_methods = df['matching'].iloc[db_mask].values
+        filtered_df = df[df.matching.isin(ar_best_methods)]
+        filtered_df = filtered_df[filtered_df[self.threshold_col] < self.threshold]
+        _add_bounds(df, filtered_df[self.value_col].values, filtered_df[self.error_col].values, f'{self.threshold_col}+{self.top_col}')
+
+        # SMDOptimA2A
+        db_mask = get_best_A2A(df[['diff', 'smd']], self.top_col, threshold_mask=df[self.threshold_col] < self.threshold)
+        ar_best_methods = df['matching'].iloc[db_mask].values
+        filtered_df = df[df.matching.isin(ar_best_methods)]
+        filtered_df = filtered_df[filtered_df[self.threshold_col] < self.threshold]
+        _add_bounds(df, filtered_df[self.value_col].values, filtered_df[self.error_col].values, f'min{self.top_col}')
+
+
+        # SMDOptim
+        db_mask = np.array([np.argmin(df[self.threshold_col].values)])
+        ar_best_methods = df['matching'].iloc[db_mask].values
+        filtered_df = df[df.matching.isin(ar_best_methods)]
+        filtered_df = filtered_df[filtered_df[self.threshold_col] < self.threshold]
+        _add_bounds(df, filtered_df[self.value_col].values, filtered_df[self.error_col].values, f'min{self.threshold_col}')
+
+
+        # Pareto
+        db_mask = get_best_group_from_pareto(df, self.top_col, self.threshold_col, self.threshold)
+        ar_best_methods = df['matching'].iloc[db_mask].values
+        filtered_df = df[df.matching.isin(ar_best_methods)]
+        filtered_df = filtered_df[filtered_df[self.threshold_col] < self.threshold]
+        _add_bounds(df, filtered_df[self.value_col].values, filtered_df[self.error_col].values, f'pareto')
+
+        
         return df
 
 results = results[~results['method'].str.contains('logit')]
@@ -173,8 +190,12 @@ results = results.fillna(-99999).groupby('dataset').mean()
 # results = results[['smdtarget_gap', 'difftarget_gap', 'smd-difftarget_gap', 'diff-smdtarget_gap', 'smd+difftarget_gap',
 #                    'smdavg_error', 'diffavg_error', 'smd-diffavg_error', 'diff-smdavg_error', 'smd+diffavg_error',]]
 
-results = results[['smdtarget_gap', 'difftarget_gap', 'smd-difftarget_gap', 'smd+difftarget_gap',
-                   'smdavg_error', 'diffavg_error', 'smd-diffavg_error', 'smd+diffavg_error',]]
+#results = results[['smdtarget_gap', 'difftarget_gap', 'smd-difftarget_gap', 'smd+difftarget_gap', 'smd#difftarget_gap',
+#                   'smdavg_error', 'diffavg_error', 'smd-diffavg_error', 'smd+diffavg_error', 'smd#diffavg_error']]
+
+
+results = results[['smdtarget_gap', 'smd-difftarget_gap', 'paretotarget_gap',
+    'smdavg_error', 'smd-diffavg_error', 'paretoavg_error', 'mindiffavg_error', 'minsmdavg_error']]
 
 
 #print(results)
