@@ -109,7 +109,7 @@ results = pd.concat([results_smd, results_smd_abs, results_rnd], axis=1)
 print(results)
 # print(results.to_latex(float_format="%.2f"))
 
-results = pd.concat([results_smd_abs, results_rnd], axis=1)
+results = pd.concat([results_smd, results_smd_abs, results_rnd], axis=1)
 
 # print(results)
 print(results.to_latex(float_format="%.2f"))
